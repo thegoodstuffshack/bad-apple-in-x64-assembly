@@ -1,0 +1,6 @@
+https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
+https://joonas.fi/2021/02/uefi-pc-boot-process-and-uefi-with-qemu/
+https://uefi.org/specs/UEFI/2.10_A/
+https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
+https://wiki.osdev.org/UEFI
+https://www.kraxel.org/repos/jenkins/edk2/
