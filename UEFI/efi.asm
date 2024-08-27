@@ -2,7 +2,6 @@
 M_OFFS equ 0x00100000
 [org M_OFFS]
 
-
 section .header
 
 ; see https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
@@ -32,9 +31,9 @@ OPTIONAL_HEADER:
 	dd start-M_OFFS	; entry point address
 	dd start-M_OFFS	; relative offset of entry point in memory (same as entry point)
 	dq M_OFFS		; image base, desired offset in memory (see org)
-	dd 0x1024		; section alignment - write decimal as hex
-	dd 0x1024		; file alignment    - write decimal as hex
-	SECT_AL equ 1024; change with above values
+	SECT_AL equ 1024
+	dd SECT_AL	; section alignment - write decimal as hex
+	dd SECT_AL	; file alignment    - write decimal as hex
 	times 16 db 0	; os, image and subsystem version, 4 bytes reserved
 	dd SECT_AL+SIZEOFALLTEXTSECTIONS+SIZEOFALLDATASECTIONS+SIZEOFALLBSSSECTIONS	; image size
 	dd SECT_AL		; size of headers, rounded to multiple of file alignment
@@ -83,8 +82,8 @@ times SECT_AL - ($-$$) db 0
 
 section .text follows=.header
 
-start: ; CHECK STACK ALIGNMENT
-	sub rsp, 4*8
+start:
+	sub rsp, 8 ; align stack to 64
 
 	mov [EFI_Handle], rcx
 	mov [EFI_SystemTable], rdx
@@ -97,6 +96,8 @@ start: ; CHECK STACK ALIGNMENT
 	; Boot Services
 	mov rdx, [rcx + EFI_OFFS_GetMemoryMap]
 	mov [EFI_GetMemoryMap], rdx
+	mov rdx, [rcx + EFI_OFFS_AllocPool]
+	mov [EFI_AllocPool], rdx
 	mov rdx, [rcx + EFI_OFFS_ExitBootServices]
 	mov [EFI_ExitBootServices], rdx
 	mov rdx, [rcx + EFI_OFFS_STALL]
@@ -109,6 +110,43 @@ start: ; CHECK STACK ALIGNMENT
 	mov rcx, [rdx + EFI_ConOut_Output]
 	mov [EFI_PrintString], rcx
 
+
+	; Get Memory Map
+.Get_Memory_Map:
+	lea rdx, [EFI_MemoryMap] ; first time use bogus pointer
+
+.try_again_MM:
+	lea rcx, [EFI_MM_MapSize]
+	lea r8, [EFI_MM_MapKey]
+	lea r9, [EFI_MM_DescVer]
+	push r9
+	lea r9, [EFI_MM_DescSize]
+	sub rsp, 32
+	call [EFI_GetMemoryMap]
+
+	add rsp, 40
+	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
+	jne .skip_alloc_MM
+
+	mov rcx, [EFI_MM_DescSize]
+	add [EFI_MM_MapSize], rcx
+	mov rdx, [EFI_MM_MapSize] ; required map size + new entry from this alloc
+	mov rcx, 7 ; type EFI_LOADER_DATA
+	lea r8, [EFI_MemoryMap]
+	sub rsp, 32
+	call [EFI_AllocPool]
+	add rsp, 32
+	mov rax, 0
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print ; for now just hang
+	mov rdx, [rcx]
+	mov [EFI_MemoryMap], rdx
+	jmp .try_again_MM
+
+.skip_alloc_MM:
+	cmp rax, EFI_ERR_SUCCESS
+	je error_print
+
 .test_print:
 	mov rcx, [EFI_ConOut]
 	lea rdx, [text.test_string]
@@ -118,39 +156,50 @@ start: ; CHECK STACK ALIGNMENT
 	mov rcx, 1000000 ; 1 sec
 	call [EFI_Stall]
 
+; CAN do stuff here before leaving loader
+
 .exit_boot_services:
 	lea rcx, [EFI_MM_MapSize]
-	mov rdx, [EFI_MM]
+	mov rdx, [EFI_MemoryMap]
 	lea r8, [EFI_MM_MapKey]
 	lea r9, [EFI_MM_DescVer]
 	push r9
 	lea r9, [EFI_MM_DescSize]
 	sub rsp, 32
 	call [EFI_GetMemoryMap]
-	add rsp, 8 ; dont need DescVer, keep shadow space for exit
-	cmp rax, 0
+	add rsp, 40
+	; cmp eax, EFI_ERR_BUFFER_TOO_SMALL
+	; je .exit_boot_services
+	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 
 	mov rcx, [EFI_Handle]
-	mov edx, dword [r8]
+	mov rdx, [EFI_MM_MapKey]
+	sub rsp, 32
 	call [EFI_ExitBootServices]
 	add rsp, 32
-	cmp rax, 0
+	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 
-end:
+	; free memory map (maybe)
+
+end: ; transfer control to kernel
 	jmp $ ; or ret to close
 
 
 error_print:
+	push rax
+	sub rsp, 32
 	mov rcx, [EFI_ConOut]
 	lea rdx, [text.error_string]
 	call [EFI_PrintString]
-	jmp end
+	add rsp, 32
+	pop rax
+	jmp $
 
 text:
-	.test_string: dw __utf16__ `THOMAS WAZ HERE!\r\n\0` ; each char becomes 00xxh
-	.error_string: dw __utf16__ `OH NO!\r\n\0` ; each char becomes 00xxh
+	.test_string: dw __utf16__ `Hello World!\r\n\0` ; each char becomes 00xxh
+	.error_string: dw __utf16__ `ERROR: Check RAX!\r\n\0` ; each char becomes 00xxh
 
 times SECT_AL - ($-start) db 0
 
@@ -166,30 +215,35 @@ data:
 	EFI_ConOut			dq 0
 
 	EFI_GetMemoryMap	dq 0	; IN/OUT (UINT* MapSize), OUT (*MemoryMap, UINT* MapKey, UINT* DescriptorSize, UINT32* DescriptorVersion)
+	EFI_AllocPool		dq 0	; IN (UINT MemoryType, UINT size), OUT (**Buffer)
 	EFI_ExitBootServices dq 0	; IN (*Handle, UINT MapKey)
 	EFI_Stall			dq 0	; IN (UINT micro seconds)
 	EFI_PrintString		dq 0	; IN (*ConOut, *String)
 
 	; Memory Map (MM) -- may need to copy map elsewhere
-	EFI_MM			dq MEMORY_MAP-M_OFFS
-	EFI_MM_MapSize	dq 8192
+	EFI_MemoryMap	dq 0
+	EFI_MM_MapSize	dq 0
 	EFI_MM_MapKey	dq 0
 	EFI_MM_DescSize dq 0
 	EFI_MM_DescVer	dq 0
 
 .offsets:
 	; System Table
-	EFI_OFFS_ConOut			equ 64
+	EFI_OFFS_ConOut 			equ 64
 	EFI_OFFS_RuntimeServices	equ 88
 	EFI_OFFS_BootServices		equ 96
 
 	; Boot Services
 	EFI_OFFS_GetMemoryMap		equ 56
+	EFI_OFFS_AllocPool			equ 64
 	EFI_OFFS_ExitBootServices	equ 232
-	EFI_OFFS_STALL			equ 248
+	EFI_OFFS_STALL 				equ 248
 
 	; ConOut
 	EFI_ConOut_Output			equ 8
 
-	MEMORY_MAP times 8192 db 0
-times 9*SECT_AL - ($-data) db 0
+.exit_codes:
+	EFI_ERR_SUCCESS				equ 0
+	EFI_ERR_BUFFER_TOO_SMALL	equ 5
+
+times SECT_AL - ($-data) db 0
