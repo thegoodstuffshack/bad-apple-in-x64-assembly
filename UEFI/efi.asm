@@ -120,25 +120,23 @@ start: ; CHECK STACK ALIGNMENT
 
 .exit_boot_services:
 	lea rcx, [EFI_MM_MapSize]
-	lea rdx, [EFI_MM]
+	mov rdx, [EFI_MM]
 	lea r8, [EFI_MM_MapKey]
 	lea r9, [EFI_MM_DescVer]
 	push r9
 	lea r9, [EFI_MM_DescSize]
 	sub rsp, 32
 	call [EFI_GetMemoryMap]
-	add rsp, 40 ; dont need DescVer
-	mov rax, [EFI_MM_MapSize]
-	jmp $
+	add rsp, 8 ; dont need DescVer, keep shadow space for exit
 	cmp rax, 0
 	jne error_print
 
-	add rsp, 32
-
 	mov rcx, [EFI_Handle]
-	mov rdx, [EFI_MM_MapKey]
+	mov edx, dword [r8]
 	call [EFI_ExitBootServices]
-
+	add rsp, 32
+	cmp rax, 0
+	jne error_print
 
 end:
 	jmp $ ; or ret to close
@@ -151,7 +149,7 @@ error_print:
 	jmp end
 
 text:
-	.test_string: dw __utf16__ `Hello World!\r\n\0` ; each char becomes 00xxh
+	.test_string: dw __utf16__ `THOMAS WAZ HERE!\r\n\0` ; each char becomes 00xxh
 	.error_string: dw __utf16__ `OH NO!\r\n\0` ; each char becomes 00xxh
 
 times SECT_AL - ($-start) db 0
@@ -173,7 +171,7 @@ data:
 	EFI_PrintString		dq 0	; IN (*ConOut, *String)
 
 	; Memory Map (MM) -- may need to copy map elsewhere
-	EFI_MM times 8192 db 0
+	EFI_MM			dq MEMORY_MAP-M_OFFS
 	EFI_MM_MapSize	dq 8192
 	EFI_MM_MapKey	dq 0
 	EFI_MM_DescSize dq 0
@@ -181,16 +179,17 @@ data:
 
 .offsets:
 	; System Table
-	EFI_OFFS_ConOut				equ 64
+	EFI_OFFS_ConOut			equ 64
 	EFI_OFFS_RuntimeServices	equ 88
 	EFI_OFFS_BootServices		equ 96
 
 	; Boot Services
 	EFI_OFFS_GetMemoryMap		equ 56
 	EFI_OFFS_ExitBootServices	equ 232
-	EFI_OFFS_STALL				equ 248
+	EFI_OFFS_STALL			equ 248
 
 	; ConOut
 	EFI_ConOut_Output			equ 8
 
+	MEMORY_MAP times 8192 db 0
 times 9*SECT_AL - ($-data) db 0
