@@ -1,6 +1,4 @@
-# UEFI-Template-for-NASM
+# bad-apple-in-x64-assembly
 
-- aim to create backbone for future UEFI projects
-- allow for use in VMs and bare metal
-
+- use uefi to load bad apple frames to screen
 - mkdir HDA_DRIVE/efi/boot
