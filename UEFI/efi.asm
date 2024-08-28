@@ -145,13 +145,14 @@ start:
 	jne error_print
 
 .test_print:
+	sub rsp, 32
 	mov rcx, [EFI_ConOut]
 	lea rdx, [text.test_string]
 	call [EFI_PrintString]
-
 .stall:
 	mov rcx, 1000000 ; 1 sec
 	call [EFI_Stall]
+	add rsp, 32
 
 ; CAN do stuff here before leaving loader
 
@@ -182,7 +183,7 @@ start:
 	; free memory map (maybe)
 
 end: ; transfer control to kernel
-	ret ; or ret to close
+	jmp $ ; or ret to close
 
 
 error_print:
