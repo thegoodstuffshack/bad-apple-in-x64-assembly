@@ -131,7 +131,7 @@ start:
 	add [EFI_MM_MapSize], rcx
 	add [EFI_MM_MapSize], rcx
 	mov rdx, [EFI_MM_MapSize] ; required map size + new entry from this alloc
-	mov rcx, 7 ; type EFI_LOADER_DATA
+	mov rcx, 2 ; type EFI_LOADER_DATA
 	lea r8, [EFI_MemoryMap]
 	sub rsp, 32
 	call [EFI_AllocPool]
