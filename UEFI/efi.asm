@@ -123,12 +123,12 @@ start:
 	lea r9, [EFI_MM_DescSize]
 	sub rsp, 32
 	call [EFI_GetMemoryMap]
-
 	add rsp, 40
 	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
 	jne .skip_alloc_MM
 
 	mov rcx, [EFI_MM_DescSize]
+	add [EFI_MM_MapSize], rcx
 	add [EFI_MM_MapSize], rcx
 	mov rdx, [EFI_MM_MapSize] ; required map size + new entry from this alloc
 	mov rcx, 7 ; type EFI_LOADER_DATA
@@ -136,16 +136,13 @@ start:
 	sub rsp, 32
 	call [EFI_AllocPool]
 	add rsp, 32
-	mov rax, 0
 	cmp rax, EFI_ERR_SUCCESS
-	jne error_print ; for now just hang
-	mov rdx, [rcx]
-	mov [EFI_MemoryMap], rdx
+	jne error_print
 	jmp .try_again_MM
 
 .skip_alloc_MM:
 	cmp rax, EFI_ERR_SUCCESS
-	je error_print
+	jne error_print
 
 .test_print:
 	mov rcx, [EFI_ConOut]
@@ -160,16 +157,17 @@ start:
 
 .exit_boot_services:
 	lea rcx, [EFI_MM_MapSize]
-	mov rdx, [EFI_MemoryMap]
+	lea rdx, [EFI_MemoryMap]
 	lea r8, [EFI_MM_MapKey]
 	lea r9, [EFI_MM_DescVer]
 	push r9
 	lea r9, [EFI_MM_DescSize]
 	sub rsp, 32
+	mov rdi, [EFI_MM_MapSize]
 	call [EFI_GetMemoryMap]
 	add rsp, 40
-	; cmp eax, EFI_ERR_BUFFER_TOO_SMALL
-	; je .exit_boot_services
+	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
+	je .exit_boot_services
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 
@@ -184,7 +182,7 @@ start:
 	; free memory map (maybe)
 
 end: ; transfer control to kernel
-	jmp $ ; or ret to close
+	ret ; or ret to close
 
 
 error_print:
