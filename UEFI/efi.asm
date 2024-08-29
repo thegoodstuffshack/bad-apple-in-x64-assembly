@@ -82,6 +82,8 @@ times SECT_AL - ($-$$) db 0
 
 section .text follows=.header
 
+	NULL equ 0
+
 start:
 	sub rsp, 8 ; align stack to 64
 
@@ -156,6 +158,21 @@ start:
 
 ; CAN do stuff here before leaving loader
 
+.load:
+; EFI_BOOT_SERVICES.LocateHandleBuffer()
+	mov rcx, DRIVE_Handle
+	mov rdx, NULL
+	mov r8, NULL
+	lea r9, [DRIVE_HandleBuffer]
+	push r9
+	lea r9, [NOHANDLES]
+; EFI_BOOT_SERVICES.HandleProtocol()
+; EFI_FILE_PROTOCOL.Open()
+; EFI_FILE_PROTOCOL.Read()
+; EFI_LOAD_FILE2_PROTOCOL.LoadFile()
+; 
+
+
 .exit_boot_services:
 	lea rcx, [EFI_MM_MapSize]
 	lea rdx, [EFI_MemoryMap]
@@ -225,6 +242,10 @@ data:
 	EFI_MM_MapKey	dq 0
 	EFI_MM_DescSize dq 0
 	EFI_MM_DescVer	dq 0
+
+	; Drive Protocol
+	DRIVE_Handle		dq 0
+	DRIVE_HandleBuffer	dq 0
 
 .offsets:
 	; System Table
