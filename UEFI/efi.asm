@@ -160,12 +160,28 @@ start:
 
 .load:
 ; EFI_BOOT_SERVICES.LocateHandleBuffer()
-	mov rcx, DRIVE_Handle
-	mov rdx, NULL
-	mov r8, NULL
-	lea r9, [DRIVE_HandleBuffer]
-	push r9
-	lea r9, [NOHANDLES]
+	; mov rcx, 2 ; ByProtocol
+	; lea rdx, DRIVE_GUID
+	; mov r8, NULL
+	; lea r9, [DRIVE_HandleBuffer]
+	; push r9
+	; lea r9, [DRIVE_NoHandles]
+	; sub rsp, 32
+	; mov rax, [EFI_BootServices]
+	; call [rax + EFI_OFFS_STALL + 64]
+	; add rsp, 32
+	
+	; mov rbx, [DRIVE_NoHandles]
+	; jmp $
+
+; EFI_BOOT_SERVICES.HandleProtocol()
+
+; EFI_SIMPLE_FILE SYSTEM_PROTOCOL.OpenVolume()
+	lea rcx, VOLUME
+	lea rdx, ROOT
+	call [OpenVolume]
+
+
 ; EFI_BOOT_SERVICES.HandleProtocol()
 ; EFI_FILE_PROTOCOL.Open()
 ; EFI_FILE_PROTOCOL.Read()
@@ -246,6 +262,11 @@ data:
 	; Drive Protocol
 	DRIVE_Handle		dq 0
 	DRIVE_HandleBuffer	dq 0
+	DRIVE_NoHandles		dq 0
+	; EBD0A0A2-B9E5-4433-87C0-68B6B72699C7
+	; DRIVE_GUID			dd 0xEBD0A0A2
+	; dw 0xB9E5, 0x4433
+	; dq 0x87C068B6B72699C7
 
 .offsets:
 	; System Table
@@ -258,6 +279,7 @@ data:
 	EFI_OFFS_AllocPool			equ 64
 	EFI_OFFS_ExitBootServices	equ 232
 	EFI_OFFS_STALL 				equ 248
+	EFI_OFFS_LocateHandleBuffer	equ 312
 
 	; ConOut
 	EFI_ConOut_Output			equ 8
