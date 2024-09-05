@@ -152,42 +152,74 @@ start:
 	lea rdx, [text.test_string]
 	call [EFI_PrintString]
 .stall:
-	mov rcx, 1000000 ; 1 sec
+	mov rcx, 500000 ; 1 sec
 	call [EFI_Stall]
 	add rsp, 32
 
 ; CAN do stuff here before leaving loader
 
-.load:
-; EFI_BOOT_SERVICES.LocateHandleBuffer()
-	; mov rcx, 2 ; ByProtocol
-	; lea rdx, DRIVE_GUID
-	; mov r8, NULL
-	; lea r9, [DRIVE_HandleBuffer]
-	; push r9
-	; lea r9, [DRIVE_NoHandles]
-	; sub rsp, 32
-	; mov rax, [EFI_BootServices]
-	; call [rax + EFI_OFFS_STALL + 64]
-	; add rsp, 32
+; .Get_Program_File:
+; ; EFI_BOOT_SERVICES.LocateHandleBuffer() - need to freepool buffer after
+; 	mov rcx, 2 ; ByProtocol
+; 	lea rdx, EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID
+; 	mov r8, NULL
+; 	lea r9, [DRIVE_HandleBuffer]
+; 	push r9
+; 	lea r9, [DRIVE_NoHandles]
+; 	sub rsp, 32
+; 	mov rax, [EFI_BootServices]
+; 	call [rax + EFI_OFFS_LocateHandleBuffer]
+; 	add rsp, 32
+; 	cmp rax, EFI_ERR_SUCCESS
+; 	jne error_print
 	
-	; mov rbx, [DRIVE_NoHandles]
-	; jmp $
+; 	mov r12, [DRIVE_NoHandles] ; assume more than 1
+; 	xor r13, r13
+; .loop_handles_PF:
 
-; EFI_BOOT_SERVICES.HandleProtocol()
+; EFI_BOOT_SERVICES.OpenProtocol()
+	mov rcx, [EFI_Handle]
+	lea rdx, [EFI_GUID_LOADED_IMAGE_PROTOCOL]
+	lea r8, [DRIVE_Handle]
+	lea r9, [EFI_Handle]
+	push qword 1 ; EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
+	sub rsp, 40
+	mov rax, [EFI_BootServices]
+	call [rax + EFI_OFFS_HandleProtocol]
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	add rsp, 48
+
+; EFI_BOOT_SERVICES.OpenProtocol()
+	mov rcx, [DRIVE_Handle]
+	mov rcx, [rcx + 24]
+	lea rdx, [EFI_GUID_SIMPLE_FILE_SYSTEM_PROTOCOL]
+	lea r8, [EFI_SFSP]
+	lea r9, [EFI_Handle]
+	push qword 1 ; EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
+	sub rsp, 40
+	mov rax, [EFI_BootServices]
+	call [rax + EFI_OFFS_HandleProtocol]
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	add rsp, 16
 
 ; EFI_SIMPLE_FILE SYSTEM_PROTOCOL.OpenVolume()
-	lea rcx, VOLUME
-	lea rdx, ROOT
-	call [OpenVolume]
+	mov rcx, [EFI_SFSP] ; EFI_SIMPLE_FILE_SYSTEM_PROTOCOL
+	lea rdx, [DRIVE_Root]
+	mov rax, [EFI_SFSP]
+	call [rax + 8] ; OpenVolume
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	add rsp, 32
+	mov rbx, -1
+	jmp $
 
 
-; EFI_BOOT_SERVICES.HandleProtocol()
 ; EFI_FILE_PROTOCOL.Open()
 ; EFI_FILE_PROTOCOL.Read()
 ; EFI_LOAD_FILE2_PROTOCOL.LoadFile()
 ; 
-
 
 .exit_boot_services:
 	lea rcx, [EFI_MM_MapSize]
@@ -263,10 +295,17 @@ data:
 	DRIVE_Handle		dq 0
 	DRIVE_HandleBuffer	dq 0
 	DRIVE_NoHandles		dq 0
-	; EBD0A0A2-B9E5-4433-87C0-68B6B72699C7
-	; DRIVE_GUID			dd 0xEBD0A0A2
-	; dw 0xB9E5, 0x4433
-	; dq 0x87C068B6B72699C7
+	DRIVE_Volume		dq 0
+	DRIVE_Root			dq 0
+	EFI_SFSP			dq 0 ; simple file system protocol
+
+	; GUIDs
+	EFI_GUID_LOADED_IMAGE_PROTOCOL: dd 0x5B1B31A1
+	dw 0x9562,0x11d2
+    db 0x8E,0x3F,0x00,0xA0,0xC9,0x69,0x72,0x3B
+	EFI_GUID_SIMPLE_FILE_SYSTEM_PROTOCOL: dd 0x0964e5b22 
+	dw 0x6459,0x11d2
+	db 0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b
 
 .offsets:
 	; System Table
@@ -277,6 +316,7 @@ data:
 	; Boot Services
 	EFI_OFFS_GetMemoryMap		equ 56
 	EFI_OFFS_AllocPool			equ 64
+	EFI_OFFS_HandleProtocol		equ 152
 	EFI_OFFS_ExitBootServices	equ 232
 	EFI_OFFS_STALL 				equ 248
 	EFI_OFFS_LocateHandleBuffer	equ 312
