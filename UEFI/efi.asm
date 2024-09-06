@@ -156,27 +156,7 @@ start:
 	call [EFI_Stall]
 	add rsp, 32
 
-; CAN do stuff here before leaving loader
-
-; .Get_Program_File:
-; ; EFI_BOOT_SERVICES.LocateHandleBuffer() - need to freepool buffer after
-; 	mov rcx, 2 ; ByProtocol
-; 	lea rdx, EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID
-; 	mov r8, NULL
-; 	lea r9, [DRIVE_HandleBuffer]
-; 	push r9
-; 	lea r9, [DRIVE_NoHandles]
-; 	sub rsp, 32
-; 	mov rax, [EFI_BootServices]
-; 	call [rax + EFI_OFFS_LocateHandleBuffer]
-; 	add rsp, 32
-; 	cmp rax, EFI_ERR_SUCCESS
-; 	jne error_print
-	
-; 	mov r12, [DRIVE_NoHandles] ; assume more than 1
-; 	xor r13, r13
-; .loop_handles_PF:
-
+.load_program:
 ; EFI_BOOT_SERVICES.OpenProtocol()
 	mov rcx, [EFI_Handle]
 	lea rdx, [EFI_GUID_LOADED_IMAGE_PROTOCOL]
@@ -223,6 +203,25 @@ start:
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 	add rsp, 8
+
+; get file size - EFI_FILE_PROTOCOL.GetInfo()
+	mov rcx, [DRIVE_ProgramFile]
+	lea rdx, [EFI_GUID_FILE_INFO_ID]
+	lea r8, [DRIVE_InfoBufferSize]
+	lea r9, [Buffer]
+
+	call GetInfo
+
+; get buffer for program
+	mov rcx, 1 ; type EFI_LOADER_CODE
+	mov rdx, [ProgramFileSize]
+	lea r8, [ProgramFilePtr]
+	sub rsp, 32
+	call [EFI_AllocPool]
+	add rsp, 32
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+
 
 ; EFI_FILE_PROTOCOL.Read()
 	mov rcx, [DRIVE_ProgramFile]
@@ -311,15 +310,15 @@ data:
 
 	; Drive Protocol
 	DRIVE_Handle		dq 0
-	; DRIVE_HandleBuffer	dq 0
-	; DRIVE_NoHandles		dq 0
 	DRIVE_Root			dq 0
 	EFI_SFSP			dq 0 ; simple file system protocol
 	DRIVE_ProgramFile	dq 0
-	ProgramFileName dw __utf16__ `\ProgramFile.txt\0`
-	ProgramFileSize 	dq 100
-
-	ProgramFileTest: times 100 db 0
+	
+	; Program Stuff
+	ProgramFilePtr   dq 0
+	ProgramFileSize  dq 0
+	ProgramFileName  dw __utf16__ `\\programs\\bad-apple.bin\0`
+	ProgramSignature db 'BadApple'
 
 	; GUIDs
 	EFI_GUID_LOADED_IMAGE_PROTOCOL: dd 0x5B1B31A1
@@ -328,6 +327,10 @@ data:
 	EFI_GUID_SIMPLE_FILE_SYSTEM_PROTOCOL: dd 0x0964e5b22 
 	dw 0x6459,0x11d2
 	db 0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b
+	EFI_GUID_FILE_INFO_ID: dd 0x09576e92
+	dw 0x6d3f,0x11d2,0x8e39
+	db 0x00,0xa0,0xc9,0x69,0x72,0x3b
+
 
 .offsets:
 	; System Table
