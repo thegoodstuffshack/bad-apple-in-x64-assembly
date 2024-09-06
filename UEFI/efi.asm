@@ -194,7 +194,7 @@ start:
 	mov rcx, [DRIVE_Handle]
 	mov rcx, [rcx + 24]
 	lea rdx, [EFI_GUID_SIMPLE_FILE_SYSTEM_PROTOCOL]
-	lea r8, [EFI_SFSP]
+	lea r8, [EFI_SFSP] ; EFI_SIMPLE_FILE_SYSTEM_PROTOCOL
 	lea r9, [EFI_Handle]
 	push qword 1 ; EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
 	sub rsp, 40
@@ -205,21 +205,39 @@ start:
 	add rsp, 16
 
 ; EFI_SIMPLE_FILE SYSTEM_PROTOCOL.OpenVolume()
-	mov rcx, [EFI_SFSP] ; EFI_SIMPLE_FILE_SYSTEM_PROTOCOL
-	lea rdx, [DRIVE_Root]
+	mov rcx, [EFI_SFSP]
+	lea rdx, [DRIVE_Root] ; get EFI_FILE_PROTOCOL
 	mov rax, [EFI_SFSP]
 	call [rax + 8] ; OpenVolume
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
-	add rsp, 32
-	mov rbx, -1
-	jmp $
-
 
 ; EFI_FILE_PROTOCOL.Open()
+	mov rcx, [DRIVE_Root]
+	lea rdx, [DRIVE_ProgramFile]
+	lea r8, [ProgramFileName]
+	mov r9, 1 ; READ
+	push qword NULL
+	mov rax, [DRIVE_Root]
+	call [rax + 8] ; Open
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	add rsp, 8
+
 ; EFI_FILE_PROTOCOL.Read()
-; EFI_LOAD_FILE2_PROTOCOL.LoadFile()
-; 
+	mov rcx, [DRIVE_ProgramFile]
+	lea rdx, [ProgramFileSize]
+	lea r8, [ProgramFileTest]
+	mov rax, [DRIVE_Root]
+	call [rax + 32] ; Read
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	add rsp, 32
+
+	mov rax, [ProgramFileTest]
+
+	mov rbx, -1
+	jmp $
 
 .exit_boot_services:
 	lea rcx, [EFI_MM_MapSize]
@@ -293,11 +311,15 @@ data:
 
 	; Drive Protocol
 	DRIVE_Handle		dq 0
-	DRIVE_HandleBuffer	dq 0
-	DRIVE_NoHandles		dq 0
-	DRIVE_Volume		dq 0
+	; DRIVE_HandleBuffer	dq 0
+	; DRIVE_NoHandles		dq 0
 	DRIVE_Root			dq 0
 	EFI_SFSP			dq 0 ; simple file system protocol
+	DRIVE_ProgramFile	dq 0
+	ProgramFileName dw __utf16__ `\ProgramFile.txt\0`
+	ProgramFileSize 	dq 100
+
+	ProgramFileTest: times 100 db 0
 
 	; GUIDs
 	EFI_GUID_LOADED_IMAGE_PROTOCOL: dd 0x5B1B31A1
