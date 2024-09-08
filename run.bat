@@ -1,3 +1,6 @@
+mkdir HDA_DRIVE\efi\boot
+mkdir HDA_DRIVE\programs
+
 nasm -f bin UEFI/efi.asm -o HDA_DRIVE/efi/boot/bootx64.efi
 
 nasm -f bin src/run.asm -o HDA_DRIVE/programs/bad-apple.bin
