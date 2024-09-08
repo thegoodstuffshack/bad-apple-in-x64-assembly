@@ -4,8 +4,6 @@ jmp start
 
 signature: db 'BadApple'
 
-
-
 start:
 	; make/find frame buffer
 	; edit frame buffer
@@ -16,6 +14,7 @@ start:
 	mov rbx, -1
 	mov rcx, -1
 	mov rdx, -1
-	jmp $
+	cli
+	hlt
 
 

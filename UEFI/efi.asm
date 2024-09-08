@@ -96,12 +96,10 @@ start:
 	mov [EFI_RuntimeServices], rdx
 
 	; Boot Services
-	mov rdx, [rcx + EFI_OFFS_GetMemoryMap]
-	mov [EFI_GetMemoryMap], rdx
 	mov rdx, [rcx + EFI_OFFS_AllocPool]
 	mov [EFI_AllocPool], rdx
-	mov rdx, [rcx + EFI_OFFS_ExitBootServices]
-	mov [EFI_ExitBootServices], rdx
+	mov rdx, [rcx + EFI_OFFS_FreePool]
+	mov [EFI_FreePool], rdx
 	mov rdx, [rcx + EFI_OFFS_STALL]
 	mov [EFI_Stall], rdx
 
@@ -111,40 +109,6 @@ start:
 	mov [EFI_ConOut], rdx
 	mov rcx, [rdx + EFI_ConOut_Output]
 	mov [EFI_PrintString], rcx
-
-
-	; Get Memory Map
-.Get_Memory_Map:
-	lea rdx, [EFI_MemoryMap] ; first time use bogus pointer
-
-.try_again_MM:
-	lea rcx, [EFI_MM_MapSize]
-	lea r8, [EFI_MM_MapKey]
-	lea r9, [EFI_MM_DescVer]
-	push r9
-	lea r9, [EFI_MM_DescSize]
-	sub rsp, 32
-	call [EFI_GetMemoryMap]
-	add rsp, 40
-	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
-	jne .skip_alloc_MM
-
-	mov rcx, [EFI_MM_DescSize]
-	add [EFI_MM_MapSize], rcx
-	add [EFI_MM_MapSize], rcx
-	mov rdx, [EFI_MM_MapSize] ; required map size + new entry from this alloc
-	mov rcx, 2 ; type EFI_LOADER_DATA
-	lea r8, [EFI_MemoryMap]
-	sub rsp, 32
-	call [EFI_AllocPool]
-	add rsp, 32
-	cmp rax, EFI_ERR_SUCCESS
-	jne error_print
-	jmp .try_again_MM
-
-.skip_alloc_MM:
-	cmp rax, EFI_ERR_SUCCESS
-	jne error_print
 
 .test_print:
 	sub rsp, 32
@@ -161,11 +125,11 @@ start:
 	mov rcx, [EFI_Handle]
 	lea rdx, [EFI_GUID_LOADED_IMAGE_PROTOCOL]
 	lea r8, [DRIVE_Handle]
-	lea r9, [EFI_Handle]
+	mov r9, [EFI_Handle]
 	push qword 1 ; EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
 	sub rsp, 40
 	mov rax, [EFI_BootServices]
-	call [rax + EFI_OFFS_HandleProtocol]
+	call [rax + EFI_OFFS_OpenProtocol]
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 	add rsp, 48
@@ -175,11 +139,11 @@ start:
 	mov rcx, [rcx + 24]
 	lea rdx, [EFI_GUID_SIMPLE_FILE_SYSTEM_PROTOCOL]
 	lea r8, [EFI_SFSP] ; EFI_SIMPLE_FILE_SYSTEM_PROTOCOL
-	lea r9, [EFI_Handle]
+	mov r9, [EFI_Handle]
 	push qword 1 ; EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
 	sub rsp, 40
 	mov rax, [EFI_BootServices]
-	call [rax + EFI_OFFS_HandleProtocol]
+	call [rax + EFI_OFFS_OpenProtocol]
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 	add rsp, 16
@@ -191,82 +155,151 @@ start:
 	call [rax + 8] ; OpenVolume
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
+	add rsp, 32
 
 ; EFI_FILE_PROTOCOL.Open()
 	mov rcx, [DRIVE_Root]
-	lea rdx, [DRIVE_ProgramFile]
+	lea rdx, [DRIVE_ProgramFile] ; EFI_FILE_PROTOCOL
 	lea r8, [ProgramFileName]
 	mov r9, 1 ; READ
 	push qword NULL
+	sub rsp, 32
 	mov rax, [DRIVE_Root]
 	call [rax + 8] ; Open
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 	add rsp, 8
 
-; get file size - EFI_FILE_PROTOCOL.GetInfo()
+; get file info - EFI_FILE_PROTOCOL.GetInfo()
+.try_again_GI:
 	mov rcx, [DRIVE_ProgramFile]
 	lea rdx, [EFI_GUID_FILE_INFO_ID]
 	lea r8, [DRIVE_InfoBufferSize]
-	lea r9, [Buffer]
-
-	call GetInfo
-
-; get buffer for program
-	mov rcx, 1 ; type EFI_LOADER_CODE
-	mov rdx, [ProgramFileSize]
-	lea r8, [ProgramFilePtr]
-	sub rsp, 32
-	call [EFI_AllocPool]
-	add rsp, 32
+	mov r9, [DRIVE_InfoBuffer]
+	mov rax, [DRIVE_Root]
+	call [rax + 8*8] ; GetInfo
+	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
+	je .alloc_GI
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
+	jmp .skip_GI
 
+.alloc_GI:
+	mov rdx, [DRIVE_InfoBufferSize]
+	lea r8, [DRIVE_InfoBuffer]
+	call allocPool
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	jmp .try_again_GI
+
+.skip_GI:
+; get file size
+	mov rdx, [DRIVE_InfoBuffer]
+	mov rdx, [rdx + 8] ; FileSize
+	mov [ProgramFileSize], rdx
+
+; get buffer for program
+	lea r8, [ProgramFilePtr]
+	call allocPool
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
 
 ; EFI_FILE_PROTOCOL.Read()
 	mov rcx, [DRIVE_ProgramFile]
 	lea rdx, [ProgramFileSize]
-	lea r8, [ProgramFileTest]
+	mov r8, [ProgramFilePtr]
 	mov rax, [DRIVE_Root]
-	call [rax + 32] ; Read
+	call [rax + 4*8] ; Read
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 	add rsp, 32
 
-	mov rax, [ProgramFileTest]
+; free memory
+	mov rcx, [DRIVE_InfoBuffer]
+	sub rsp, 32
+	call [EFI_FreePool]
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+; close file -- close both jic
+	mov rcx, [DRIVE_ProgramFile]
+	mov rax, [DRIVE_Root]
+	call [rax + 2*8] ; Close
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	mov rcx, [DRIVE_Root]
+	mov rax, rcx
+	call [rax + 2*8] ; Close
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+	add rsp, 32
 
-	mov rbx, -1
+; check file
+	mov rcx, [ProgramFilePtr]
+	mov rcx, [rcx + 2]
+	cmp rcx, [ProgramSignature]
+	je .exit_boot_services
+
+	sub rsp, 32
+	mov rcx, [EFI_ConOut]
+	lea rdx, [text.FILE_ERROR]
+	call [EFI_PrintString]
 	jmp $
 
 .exit_boot_services:
 	lea rcx, [EFI_MM_MapSize]
-	lea rdx, [EFI_MemoryMap]
+	mov rdx, [EFI_MemoryMap]
 	lea r8, [EFI_MM_MapKey]
 	lea r9, [EFI_MM_DescVer]
 	push r9
 	lea r9, [EFI_MM_DescSize]
 	sub rsp, 32
 	mov rdi, [EFI_MM_MapSize]
-	call [EFI_GetMemoryMap]
+	mov rax, [EFI_BootServices]
+	lea rax, [rax + EFI_OFFS_GetMemoryMap]
+	call [rax] ; IN/OUT (UINT* MapSize), OUT (*MemoryMap, UINT* MapKey, UINT* DescriptorSize, UINT32* DescriptorVersion)
+
 	add rsp, 40
 	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
-	je .exit_boot_services
+	je .alloc_MemoryMap
 	cmp rax, EFI_ERR_SUCCESS
-	jne error_print
+	je .continue
+	jmp error_print
 
+.alloc_MemoryMap:
+	mov rdx, [EFI_MM_DescSize]
+	shl rdx, 1
+	add rdx, [EFI_MM_MapSize]
+	lea r8, [EFI_MemoryMap]
+	call allocPool
+	cmp rax, EFI_ERR_SUCCESS
+	je .exit_boot_services
+	jmp error_print
+
+.continue:
 	mov rcx, [EFI_Handle]
 	mov rdx, [EFI_MM_MapKey]
 	sub rsp, 32
-	call [EFI_ExitBootServices]
+	mov rax, [EFI_BootServices]
+	lea rax, [rax + EFI_OFFS_ExitBootServices] ;  IN (*Handle, UINTN MapKey)
+	call [rax]
 	add rsp, 32
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 
-	; free memory map (maybe)
+end: ; transfer control to program
+	mov rax, [ProgramFilePtr]
+	jmp rax
 
-end: ; transfer control to kernel
-	jmp $ ; or ret to close
 
+; IN rdx: size
+; OUT r8: **
+; Returns rax: EFI_STATUS
+allocPool:
+	mov rcx, 1 ; type EFI_LOADER_DATA
+	sub rsp, 32
+	call [EFI_AllocPool]
+	add rsp, 32
+	ret
 
 error_print:
 	push rax
@@ -278,15 +311,16 @@ error_print:
 	pop rax
 	jmp $
 
-text:
-	.test_string: dw __utf16__ `Hello World!\r\n\0` ; each char becomes 00xxh
-	.error_string: dw __utf16__ `ERROR: Check RAX!\r\n\0` ; each char becomes 00xxh
-
 times SECT_AL - ($-start) db 0
 
 
 section .data follows=.text
 data:
+text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
+	.test_string: dw __utf16__ `Hello World!\r\n\0`
+	.error_string: dw __utf16__ `ERROR: Check RAX!\r\n\0`
+	.FILE_ERROR: dq __utf16__ `The program signature does not match\r\n\0`
+
 ; see https://uefi.org/sites/default/files/resources/UEFI_Spec_2_10_A_Aug8.pdf
 	EFI_Handle		dq 0
 	EFI_SystemTable	dq 0
@@ -295,9 +329,8 @@ data:
 	EFI_RuntimeServices dq 0
 	EFI_ConOut			dq 0
 
-	EFI_GetMemoryMap	dq 0	; IN/OUT (UINT* MapSize), OUT (*MemoryMap, UINT* MapKey, UINT* DescriptorSize, UINT32* DescriptorVersion)
 	EFI_AllocPool		dq 0	; IN (UINT MemoryType, UINT size), OUT (**Buffer)
-	EFI_ExitBootServices dq 0	; IN (*Handle, UINT MapKey)
+	EFI_FreePool		dq 0	; IN (*Buffer)
 	EFI_Stall			dq 0	; IN (UINT micro seconds)
 	EFI_PrintString		dq 0	; IN (*ConOut, *String)
 
@@ -313,6 +346,8 @@ data:
 	DRIVE_Root			dq 0
 	EFI_SFSP			dq 0 ; simple file system protocol
 	DRIVE_ProgramFile	dq 0
+	DRIVE_InfoBufferSize dq 0
+	DRIVE_InfoBuffer	dq 0
 	
 	; Program Stuff
 	ProgramFilePtr   dq 0
@@ -328,7 +363,8 @@ data:
 	dw 0x6459,0x11d2
 	db 0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b
 	EFI_GUID_FILE_INFO_ID: dd 0x09576e92
-	dw 0x6d3f,0x11d2,0x8e39
+	dw 0x6d3f,0x11d2
+	db 0x8e,0x39
 	db 0x00,0xa0,0xc9,0x69,0x72,0x3b
 
 
@@ -341,9 +377,11 @@ data:
 	; Boot Services
 	EFI_OFFS_GetMemoryMap		equ 56
 	EFI_OFFS_AllocPool			equ 64
-	EFI_OFFS_HandleProtocol		equ 152
+	EFI_OFFS_FreePool			equ 72
 	EFI_OFFS_ExitBootServices	equ 232
 	EFI_OFFS_STALL 				equ 248
+	EFI_OFFS_OpenProtocol		equ 280
+	EFI_OFFS_CloseProtocol		equ 288
 	EFI_OFFS_LocateHandleBuffer	equ 312
 
 	; ConOut
