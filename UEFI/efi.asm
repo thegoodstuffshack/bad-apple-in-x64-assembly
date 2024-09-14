@@ -49,8 +49,8 @@ OPTIONAL_HEADER:
 OPTIONAL_HEADER_END:
 OPTIONAL_HEADER_SIZE equ OPTIONAL_HEADER_END - OPTIONAL_HEADER
 
-SIZEOFALLTEXTSECTIONS equ SECT_AL
-SIZEOFALLDATASECTIONS equ 5*SECT_AL
+SIZEOFALLTEXTSECTIONS equ 2*SECT_AL
+SIZEOFALLDATASECTIONS equ SECT_AL
 SIZEOFALLBSSSECTIONS  equ 0
 
 SECTION_TABLE:
@@ -68,9 +68,9 @@ SECTION_TABLE:
 .2:
 	dq `.data`
 	dd SECT_AL
-	dd 2*SECT_AL
+	dd 3*SECT_AL
 	dd SECT_AL
-	dd 2*SECT_AL
+	dd 3*SECT_AL
 	dd 0
 	dd 0
 	dw 0
@@ -116,9 +116,76 @@ start:
 	lea rdx, [text.test_string]
 	call [EFI_PrintString]
 .stall:
-	mov rcx, 500000 ; 1 sec
+	mov rcx, 1000000 ; 1 sec
 	call [EFI_Stall]
 	add rsp, 32
+
+
+; setup graphics output protocol
+; EFI_BOOT_SERVICES.LocateProtocol()
+	lea rcx, EFI_GUID_GRAPHICS_OUTPUT_PROTOCOL
+	mov rdx, NULL
+	lea r8, [GOP_Interface]
+	mov rax, [EFI_BootServices]
+	call [rax + EFI_OFFS_LocateProtocol]
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+
+; get native mode and number of modes
+	mov rcx, [GOP_Interface]
+	mov rcx, [rcx + 3*8] ; EFI_GRAPHICS_OUTPUT_PROTOCOL_MODE
+	mov rcx, [rcx]
+	mov [GOP_NumModes], rcx ; sets both NumModes and CurrentMode (Native originally)
+
+; get native resolution
+; EFI_GRAPHICS_OUTPUT_PROTOCOL.QueryMode()
+	mov rcx, [GOP_Interface]
+	mov rdx, [GOP_CurrentMode]
+	lea r8, [GOP_CurrentModeInfoSize]
+	lea r9, [GOP_CurrentModeInfo]
+	call [rcx + 0] ; QueryMode
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+
+	mov rcx, [GOP_CurrentModeInfo]
+	mov edx, [rcx + 4] ; H Res
+	mov [GOP_Width], edx
+	mov edx, [rcx + 8] ; V Res
+	mov [GOP_Height], edx
+	mov edx, [rcx + 32] ; PixelsPerScanLine
+	cmp edx, [GOP_Width]
+	je .GOP_skipHResFix
+	mov [GOP_Width], edx
+.GOP_skipHResFix:
+	mov r12d, [rcx + 12] ; PixelFormat
+	cmp r12d, 1
+	mov rax, -10
+	ja error_print ; not handled yet
+
+; get framebuffer
+	mov rcx, [GOP_Interface]
+	mov rcx, [rcx + 3*8] ; Mode
+
+	mov rdx, [rcx + 3*8] ; FrameBufferBase
+	mov [GOP_VRAM], rdx
+	mov rdx, [rcx + 4*8] ; FrameBufferSize
+	mov [GOP_VRAMSize], rdx
+
+	mov r8, [GOP_Width] ; w and h
+	mov r9, [GOP_VRAM]
+	mov r10, [GOP_VRAMSize]
+
+	mov rsi, [GOP_VRAM]
+	mov ecx, [GOP_Width]
+	shl ecx, 7
+.loop:
+	mov dword [rsi], 0x00FF0000
+	add rsi, 4
+	loop .loop
+
+	mov rax, -1
+	jmp $
+
 
 .load_program:
 ; EFI_BOOT_SERVICES.OpenProtocol()
@@ -311,7 +378,7 @@ error_print:
 	pop rax
 	jmp $
 
-times SECT_AL - ($-start) db 0
+times 2*SECT_AL - ($-start) db 0
 
 
 section .data follows=.text
@@ -355,7 +422,22 @@ text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
 	ProgramFileName  dw __utf16__ `\\programs\\bad-apple.bin\0`
 	ProgramSignature db 'BadApple'
 
+	; Graphical Output Protocol
+	GOP_Interface	dq 0
+	GOP_NumModes	dd 0
+	GOP_CurrentMode	dd 0
+	GOP_CurrentModeInfoSize dq 0
+	GOP_CurrentModeInfo		dq 0
+	GOP_Width		dd 0
+	GOP_Height		dd 0
+	GOP_VRAM		dq 0
+	GOP_VRAMSize	dq 0
+
 	; GUIDs
+	EFI_GUID_GRAPHICS_OUTPUT_PROTOCOL dd 0x9042a9de
+	dw 0x23dc,0x4a38
+	db 0x96,0xfb
+	db 0x7a,0xde,0xd0,0x80,0x51,0x6a
 	EFI_GUID_LOADED_IMAGE_PROTOCOL: dd 0x5B1B31A1
 	dw 0x9562,0x11d2
     db 0x8E,0x3F,0x00,0xA0,0xC9,0x69,0x72,0x3B
@@ -383,6 +465,7 @@ text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
 	EFI_OFFS_OpenProtocol		equ 280
 	EFI_OFFS_CloseProtocol		equ 288
 	EFI_OFFS_LocateHandleBuffer	equ 312
+	EFI_OFFS_LocateProtocol		equ 320
 
 	; ConOut
 	EFI_ConOut_Output			equ 8
