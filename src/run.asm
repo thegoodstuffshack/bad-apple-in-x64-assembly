@@ -14,6 +14,10 @@ start:
 	mov rbx, -1
 	mov rcx, -1
 	mov rdx, -1
+
+
+
+
 	cli
 	hlt
 
