@@ -1,6 +1,6 @@
 [BITS 64]
 M_OFFS equ 0x00100000
-[default rel]
+[org M_OFFS]
 
 section .header
 
@@ -28,10 +28,10 @@ OPTIONAL_HEADER:
 	dd SIZEOFALLTEXTSECTIONS
 	dd SIZEOFALLDATASECTIONS
 	dd SIZEOFALLBSSSECTIONS
-	dd start		; entry point address
-	dd start		; relative offset of entry point in memory (same as entry point)
+	dd start-M_OFFS	; entry point address
+	dd start-M_OFFS	; relative offset of entry point in memory (same as entry point)
 	dq M_OFFS		; image base, desired offset in memory (see org)
-	SECT_AL equ 2048
+	SECT_AL equ 1024
 	dd SECT_AL	; section alignment - write decimal as hex
 	dd SECT_AL	; file alignment    - write decimal as hex
 	times 16 db 0	; os, image and subsystem version, 4 bytes reserved
@@ -49,7 +49,7 @@ OPTIONAL_HEADER:
 OPTIONAL_HEADER_END:
 OPTIONAL_HEADER_SIZE equ OPTIONAL_HEADER_END - OPTIONAL_HEADER
 
-SIZEOFALLTEXTSECTIONS equ 1*SECT_AL
+SIZEOFALLTEXTSECTIONS equ 2*SECT_AL
 SIZEOFALLDATASECTIONS equ SECT_AL
 SIZEOFALLBSSSECTIONS  equ 0
 
@@ -68,9 +68,9 @@ SECTION_TABLE:
 .2:
 	dq `.data`
 	dd SECT_AL
-	dd 2*SECT_AL
+	dd 3*SECT_AL
 	dd SECT_AL
-	dd 2*SECT_AL
+	dd 3*SECT_AL
 	dd 0
 	dd 0
 	dw 0
@@ -171,6 +171,7 @@ start:
 	mov rdx, [rcx + 4*8] ; FrameBufferSize
 	mov [GOP_VRAMSize], rdx
 
+
 .load_program:
 ; EFI_BOOT_SERVICES.OpenProtocol()
 	mov rcx, [EFI_Handle]
@@ -238,6 +239,7 @@ start:
 .alloc_GI:
 	mov rdx, [DRIVE_InfoBufferSize]
 	lea r8, [DRIVE_InfoBuffer]
+	jmp $
 	call allocPool
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
@@ -277,6 +279,7 @@ SystemInfoStructSize equ 4*8 + 2*4
 	jne error_print
 
 ; fill SystemInfoStruct
+jmp $
 	mov rcx, [temp_SystemInfoStructPtr]
 	mov qword [rcx], SystemInfoStructSize
 	mov rdx, [EFI_SystemTable]
@@ -294,8 +297,12 @@ SystemInfoStructSize equ 4*8 + 2*4
 
 
 ; free memory
-	mov rcx, [DRIVE_InfoBuffer]
+	mov rcx, [GOP_CurrentModeInfo]
 	sub rsp, 32
+	call [EFI_FreePool]
+	mov rcx, [DRIVE_InfoBuffer]
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
 	call [EFI_FreePool]
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
@@ -318,7 +325,6 @@ SystemInfoStructSize equ 4*8 + 2*4
 	cmp rcx, [ProgramSignature]
 	je .exit_boot_services
 
-	sub rsp, 32
 	mov rcx, [EFI_ConOut]
 	lea rdx, [text.FILE_ERROR]
 	call [EFI_PrintString]
@@ -376,6 +382,7 @@ end: ; transfer control to program
 allocPool:
 	mov rcx, 1 ; type EFI_LOADER_DATA
 	sub rsp, 32
+	jmp $
 	call [EFI_AllocPool]
 	add rsp, 32
 	ret
@@ -388,11 +395,9 @@ error_print:
 	call [EFI_PrintString]
 	add rsp, 32
 	pop rax
-	cli
-	hlt
+	jmp $
 
-
-times 1*SECT_AL - ($-start) db 0 ; ensure no jump or call attempt is made past each SECT_AL division of .text section
+times 2*SECT_AL - ($-start) db 0
 
 
 section .data follows=.text
