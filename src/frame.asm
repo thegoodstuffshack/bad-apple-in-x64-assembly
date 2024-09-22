@@ -1,37 +1,12 @@
 
 FRAME_BYTE_SIZE equ 0
 
-Frame: ; use uefi file protocol, assume folder contains valid frame files (correct size, etc.)
+Frame:
 .get:
 	push rbx
 
-	; EFI_FILE_PROTOCOL.Open()
-	lea rcx, [rbx + SIS_DriveRoot]
-	lea rdx, [FrameFileProtocol] ; EFI_FILE_PROTOCOL
-	lea r8, [FrameFileName]
-	mov r9, 1 ; READ
-	push qword 0
-	sub rsp, 32
-	mov rax, [rcx]
-	call [rax + 8] ; Open
-	cmp rax, 0
-	jne $
-	add rsp, 40
-
-	; EFI_FILE_PROTOCOL.Read()
-	; mov rcx, [FrameFileProtocol]
-	; lea rdx, [FrameByteSize]
-	; mov r8, Current_Frame
-	; mov rax, [DRIVE_Root]
-	; call [rax + 4*8] ; Read
-	; cmp rax, EFI_ERR_SUCCESS
-	; jne error_print
-	; add rsp, 32
-
-	; EFI_FILE_PROTOCOL.Close()
-
-	cli
-	hlt
+; https://wiki.osdev.org/ATA_PIO_Mode
+; https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system 
 
 	pop rbx
 ret

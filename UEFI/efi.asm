@@ -266,7 +266,7 @@ start:
 	add rsp, 32
 
 
-SystemInfoStructSize equ 4*8 + 2*4 + 1*8
+SystemInfoStructSize equ 3*8 + 2*4
 ; allocatePool for SystemInfoStruct
 	mov rdx, SystemInfoStructSize
 	lea r8, [temp_SystemInfoStructPtr]
@@ -281,18 +281,12 @@ SystemInfoStructSize equ 4*8 + 2*4 + 1*8
 	mov qword [rcx], SystemInfoStructSize
 	mov rdx, [EFI_SystemTable]
 	mov [rcx + 1*8], rdx
-	mov rdx, [GOP_Interface]
-	mov rdx, [rdx]
-	mov [rcx + 2*8], rdx
 	mov rdx, [GOP_VRAM]
-	mov [rcx + 3*8], rdx
+	mov [rcx + 2*8], rdx
 	mov edx, [GOP_Width]
-	mov [rcx + 4*8], rdx
-	mov rdx, [GOP_Height]
-	mov [rcx + 4*8 + 1*4], rdx
-	mov rdx, [DRIVE_Root]
-	mov rdx, [rdx]
-	mov [rcx + 4*8 + 2*4], rdx
+	mov [rcx + 3*8], rdx
+	mov edx, [GOP_Height]
+	mov [rcx + 3*8 + 1*4], edx
 
 	mov rbx, rcx
 

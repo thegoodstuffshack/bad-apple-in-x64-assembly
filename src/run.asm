@@ -8,21 +8,20 @@ signature: db 'BadApple'
 ; SystemInfoStruct {
 ;	UINT64	Size
 ;	VOID*	SystemTable
-;	VOID*	GOP_Interface	EFI_GRAPHICS_OUTPUT_PROTCOL
 ;	VOID*	VRAM
 ;	UINT32	ScreenWidth
 ;	UINT32	ScreenHeight
-;	VOID*	DriveRoot		EFI_FILE_PROTOCOL
 ;	...
 ; }
 
+; create space for struct here
+; %include "src/SIstruct.asm"
+
 SIS_Size 			equ 0
 SIS_SystemTable 	equ 8
-SIS_GOP_Interface 	equ 16
-SIS_VRAM 			equ 24
-SIS_ScreenWidth 	equ 32
-SIS_ScreenHeight 	equ 36
-SIS_DriveRoot		equ 40
+SIS_VRAM 			equ 16
+SIS_ScreenWidth 	equ 24
+SIS_ScreenHeight 	equ 28
 
 
 start:
@@ -33,6 +32,9 @@ start:
 
 	call PIT.init
 	call PIT.wait
+
+; temporarily load the entire video into memory in order to test the buffer and pit,
+; then implement a driver to read the files off a drive
 
 frame_loop:
 	; call Frame.get
@@ -65,9 +67,9 @@ frame_loop:
 	cli
 	hlt
 
-BLUE  db 255
-GREEN db 255
-RED   db 255
+BLUE  db 0
+GREEN db 0
+RED   db 0
 reserved db 0
 
 SystemInfoStruct dq 0
