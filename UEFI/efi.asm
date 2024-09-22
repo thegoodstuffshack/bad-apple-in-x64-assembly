@@ -165,7 +165,7 @@ start:
 ; get framebuffer
 	mov rcx, [GOP_Interface]
 	mov rcx, [rcx + 3*8] ; Mode
-
+	; mov rdx, [rcx]
 	mov rdx, [rcx + 3*8] ; FrameBufferBase
 	mov [GOP_VRAM], rdx
 	mov rdx, [rcx + 4*8] ; FrameBufferSize
@@ -266,7 +266,7 @@ start:
 	add rsp, 32
 
 
-SystemInfoStructSize equ 4*8 + 2*4
+SystemInfoStructSize equ 4*8 + 2*4 + 1*8
 ; allocatePool for SystemInfoStruct
 	mov rdx, SystemInfoStructSize
 	lea r8, [temp_SystemInfoStructPtr]
@@ -282,6 +282,7 @@ SystemInfoStructSize equ 4*8 + 2*4
 	mov rdx, [EFI_SystemTable]
 	mov [rcx + 1*8], rdx
 	mov rdx, [GOP_Interface]
+	mov rdx, [rdx]
 	mov [rcx + 2*8], rdx
 	mov rdx, [GOP_VRAM]
 	mov [rcx + 3*8], rdx
@@ -289,6 +290,9 @@ SystemInfoStructSize equ 4*8 + 2*4
 	mov [rcx + 4*8], rdx
 	mov rdx, [GOP_Height]
 	mov [rcx + 4*8 + 1*4], rdx
+	mov rdx, [DRIVE_Root]
+	mov rdx, [rdx]
+	mov [rcx + 4*8 + 2*4], rdx
 
 	mov rbx, rcx
 
