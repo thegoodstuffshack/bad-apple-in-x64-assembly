@@ -200,73 +200,82 @@ start:
 	add rsp, 16
 
 ; EFI_SIMPLE_FILE SYSTEM_PROTOCOL.OpenVolume()
+; -- assume this is the only drive required
 	mov rcx, [EFI_SFSP]
-	lea rdx, [DRIVE_Root] ; get EFI_FILE_PROTOCOL
+	lea rdx, [DRIVE_Root] ; get EFI_FILE_PROTOCOL of volume
 	mov rax, [EFI_SFSP]
 	call [rax + 8] ; OpenVolume
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 	add rsp, 32
 
-; EFI_FILE_PROTOCOL.Open()
-	mov rcx, [DRIVE_Root]
-	lea rdx, [DRIVE_ProgramFile] ; EFI_FILE_PROTOCOL
-	lea r8, [ProgramFileName]
-	mov r9, 1 ; READ
-	push qword NULL
-	sub rsp, 32
-	mov rax, [DRIVE_Root]
-	call [rax + 8] ; Open
+; frame data file
+	lea rdx, [FrameFileProtocol]
+	lea r8, [FrameFileName]
+	call openFile
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
-	add rsp, 8
 
-; get file info - EFI_FILE_PROTOCOL.GetInfo()
-.try_again_GI:
-	mov rcx, [DRIVE_ProgramFile]
-	lea rdx, [EFI_GUID_FILE_INFO_ID]
-	lea r8, [DRIVE_InfoBufferSize]
-	mov r9, [DRIVE_InfoBuffer]
-	mov rax, [DRIVE_Root]
-	call [rax + 8*8] ; GetInfo
-	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
-	je .alloc_GI
+	push qword [FrameFileProtocol]
+	call getFileSize
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
-	jmp .skip_GI
+	mov [FrameFileSize], rdx
 
-.alloc_GI:
-	mov rdx, [DRIVE_InfoBufferSize]
-	lea r8, [DRIVE_InfoBuffer]
+	lea r8, [FrameFilePtr]
 	call allocPool
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
-	jmp .try_again_GI
 
-.skip_GI:
-; get file size
-	mov rdx, [DRIVE_InfoBuffer]
-	mov rdx, [rdx + 8] ; FileSize
+	mov rcx, [FrameFileProtocol]
+	lea rdx, [FrameFileSize]
+	mov r8, [FrameFilePtr]
+	call readFile
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+
+	mov rcx, [FrameFileProtocol]
+	mov rax, [DRIVE_Root]
+	sub rsp, 32
+	call [rax + 2*8] ; Close
+	add rsp, 32
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+
+; program file
+	lea rdx, [DRIVE_ProgramFile]
+	lea r8, [ProgramFileName]
+	call openFile
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+
+	push qword [DRIVE_ProgramFile]
+	call getFileSize
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
 	mov [ProgramFileSize], rdx
 
-; get buffer for program
 	lea r8, [ProgramFilePtr]
 	call allocPool
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 
-; EFI_FILE_PROTOCOL.Read()
 	mov rcx, [DRIVE_ProgramFile]
 	lea rdx, [ProgramFileSize]
 	mov r8, [ProgramFilePtr]
-	mov rax, [DRIVE_Root]
-	call [rax + 4*8] ; Read
+	call readFile
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
+
+	mov rcx, [DRIVE_ProgramFile]
+	mov rax, [DRIVE_Root]
+	sub rsp, 32
+	call [rax + 2*8] ; Close
 	add rsp, 32
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
 
-
-SystemInfoStructSize equ 3*8 + 2*4
+SystemInfoStructSize equ 3*8 + 2*4 + 2*8
 ; allocatePool for SystemInfoStruct
 	mov rdx, SystemInfoStructSize
 	lea r8, [temp_SystemInfoStructPtr]
@@ -287,28 +296,21 @@ SystemInfoStructSize equ 3*8 + 2*4
 	mov [rcx + 3*8], rdx
 	mov edx, [GOP_Height]
 	mov [rcx + 3*8 + 1*4], edx
+	mov rdx, [FrameFilePtr]
+	mov [rcx + 3*8 + 2*4], rdx
+	mov rdx, [FrameFileSize]
+	mov [rcx + 3*8 + 2*4 + 1*8], rdx
 
 	mov rbx, rcx
 
-
-; free memory
-	mov rcx, [DRIVE_InfoBuffer]
-	sub rsp, 32
-	call [EFI_FreePool]
-	cmp rax, EFI_ERR_SUCCESS
-	jne error_print
-; close file -- close both jic
-	mov rcx, [DRIVE_ProgramFile]
-	mov rax, [DRIVE_Root]
-	call [rax + 2*8] ; Close
-	cmp rax, EFI_ERR_SUCCESS
-	jne error_print
+; close volume
 	mov rcx, [DRIVE_Root]
 	mov rax, rcx
+	sub rsp, 32
 	call [rax + 2*8] ; Close
+	add rsp, 32
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
-	add rsp, 32
 
 ; check file
 	mov rcx, [ProgramFilePtr]
@@ -316,6 +318,7 @@ SystemInfoStructSize equ 3*8 + 2*4
 	cmp rcx, [ProgramSignature]
 	je .exit_boot_services
 
+.file_error:
 	sub rsp, 32
 	mov rcx, [EFI_ConOut]
 	lea rdx, [text.FILE_ERROR]
@@ -369,12 +372,73 @@ end: ; transfer control to program
 
 
 ; IN rdx: size
-; OUT r8: **
+; OUT r8: **void
 ; Returns rax: EFI_STATUS
 allocPool:
 	mov rcx, 1 ; type EFI_LOADER_DATA
 	sub rsp, 32
 	call [EFI_AllocPool]
+	add rsp, 32
+	ret
+
+; OUT rdx: files EFI_FILE_PROTOCOL
+; IN r8: *FileName
+; Returns rax: EFI_STATUS
+openFile: ; EFI_FILE_PROTOCOL.Open()
+	mov rcx, [DRIVE_Root]
+	mov r9, 1 ; READ
+	push qword NULL
+	sub rsp, 32
+	call [rcx + 8] ; Open
+	add rsp, 40
+	ret
+
+; Push qword EFI_FILE_PROTOCOL
+; Returns rdx: fileSize
+; Returns rax: EFI_STATUS
+getFileSize: ; EFI_FILE_PROTOCOL.GetInfo()
+	mov rcx, [rsp+8]
+	lea rdx, [EFI_GUID_FILE_INFO_ID]
+	lea r8, [DRIVE_InfoBufferSize]
+	mov r9, [DRIVE_InfoBuffer]
+	mov rax, [DRIVE_Root]
+	sub rsp, 32
+	call [rax + 8*8] ; GetInfo
+	add rsp, 32
+	cmp eax, EFI_ERR_BUFFER_TOO_SMALL
+	je .alloc_GI
+	cmp rax, EFI_ERR_SUCCESS
+	je .getFileInfo
+	ret 8
+.alloc_GI:
+	mov rdx, [DRIVE_InfoBufferSize]
+	lea r8, [DRIVE_InfoBuffer]
+	sub rsp, 32
+	call allocPool
+	add rsp, 32
+	cmp rax, EFI_ERR_SUCCESS
+	je getFileSize
+	ret 8
+.getFileInfo:
+	mov rdx, [DRIVE_InfoBuffer]
+	mov rdx, [rdx + 8] ; FileSize
+	push rdx
+
+	mov rcx, [DRIVE_InfoBuffer]
+	sub rsp, 32
+	call [EFI_FreePool]
+	add rsp, 32
+	pop rdx
+	ret 8
+
+; IN rcx: EFI_FILE_PROTOCOL
+; IN rdx: *fileSize
+; OUT r8: **void
+; Returns rax: EFI_STATUS
+readFile: ; EFI_FILE_PROTOCOL.Read()
+	mov rax, [DRIVE_Root]
+	sub rsp, 32
+	call [rax + 4*8] ; Read
 	add rsp, 32
 	ret
 
@@ -433,6 +497,12 @@ text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
 	ProgramFileSize  dq 0
 	ProgramFileName  dw __utf16__ `\\programs\\bad-apple.bin\0`
 	ProgramSignature db 'BadApple'
+
+	; Frame Data
+	FrameFileProtocol dq 0
+	FrameFilePtr   dq 0
+	FrameFileSize  dq 0
+	FrameFileName  dw __utf16__ `\\frame_data\\frames.data\0`
 
 	; Graphical Output Protocol
 	GOP_Interface	dq 0

@@ -1,5 +1,5 @@
 
-FRAME_BYTE_SIZE equ 0
+FRAME_BYTE_SIZE equ 1280 * 800 / 4
 
 Frame:
 .get:
@@ -10,13 +10,29 @@ Frame:
 
 	pop rbx
 ret
-
 .updateFileName:
+
+
+getFrame:
+	mov rdi, [rbx + SIS_FrameData]
+	
+
+	mov rcx, [rdi + rsi]
+
+
+
+ret
+
+
+SIS_FrameData 		equ 32
+SIS_FrameDataSize 	equ 40
+
+
 
 
 FrameFileProtocol dq 0
 FrameFileName dw __utf16__ `Bad_Apple_Frame 00000\0`
 FrameByteSize dq FRAME_BYTE_SIZE
 
-Current_Frame:
-resb FRAME_BYTE_SIZE
+FrameBuffer:
+; resb FRAME_BYTE_SIZE
