@@ -210,6 +210,12 @@ start:
 	add rsp, 32
 
 ; frame data file
+	sub rsp, 32
+	mov rcx, [EFI_ConOut]
+	lea rdx, [text.readingFile_string]
+	call [EFI_PrintString]
+	add rsp, 32
+
 	lea rdx, [FrameFileProtocol]
 	lea r8, [FrameFileName]
 	call openFile
@@ -243,6 +249,12 @@ start:
 	jne error_print
 
 ; program file
+	sub rsp, 32
+	mov rcx, [EFI_ConOut]
+	lea rdx, [text.readingFile_string]
+	call [EFI_PrintString]
+	add rsp, 32
+
 	lea rdx, [DRIVE_ProgramFile]
 	lea r8, [ProgramFileName]
 	call openFile
@@ -462,7 +474,8 @@ data:
 text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
 	.test_string: dw __utf16__ `Hello World!\r\n\0`
 	.error_string: dw __utf16__ `ERROR: Check RAX!\r\n\0`
-	.FILE_ERROR: dq __utf16__ `The program signature does not match\r\n\0`
+	.FILE_ERROR: dw __utf16__ `The program signature does not match\r\n\0`
+	.readingFile_string: dw __utf16__ `Loading file into memory\r\n\0`
 
 ; see https://uefi.org/sites/default/files/resources/UEFI_Spec_2_10_A_Aug8.pdf
 	EFI_Handle		dq 0
