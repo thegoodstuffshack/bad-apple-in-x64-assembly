@@ -1,5 +1,5 @@
-pixelScale equ 2
-width equ 320 ; max value 4096-16
+pixelScale equ 4
+width equ 320 ; max value 4096-16 -- needs to be divisible by 16
 height equ 200; max value 4096-16
 FRAME_BYTE_SIZE equ width * height / 8
 pixelOnColour equ 0x00FF00FF ; white
@@ -21,7 +21,7 @@ printFrame: ; for now, the frame is uncompressed
 	mov rdi, [rbx + SIS_VRAM]
 	mov rsi, [rbx + SIS_FrameData]
 	mov eax, [frameCounter]
-	mov edx, FRAME_BYTE_SIZE
+	mov edx, FRAME_BYTE_SIZE	
 	mul edx
 	add rsi, rax
 	mov r9w, width / 16
@@ -59,10 +59,12 @@ printFrame: ; for now, the frame is uncompressed
 .height_change:
 	push rsi
 	mov r9w, width / 16
-	mov r8b, pixelScale - 1
+	mov r8b, pixelScale
 	movzx rax, word [rbx + SIS_ScreenWidth]
 	shl rax, 2
 .applyPixelHeightScale:
+	sub r8b, 1
+	jz .skip
 	mov rcx, width * pixelScale * 4
 	sub rdi, rcx
 	mov rsi, rdi
@@ -71,10 +73,9 @@ printFrame: ; for now, the frame is uncompressed
 	
 	rep movsb ; copy vram down a row
 	mov rsi, rdx
+	jmp .applyPixelHeightScale
 
-	sub r8b, 1
-	jnz .applyPixelHeightScale
-
+.skip:
 	sub rdi, width * pixelScale * 4
 	add rdi, rax
 

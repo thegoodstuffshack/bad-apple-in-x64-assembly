@@ -46,7 +46,7 @@ start:
 frame_loop:
 	call printFrame
 	inc dword [frameCounter]
-	cmp dword [frameCounter], 1050
+	cmp dword [frameCounter], 6562
 	je .end
 	; ; call Buffer.update
 	; ; call Buffer.swap
@@ -54,39 +54,38 @@ frame_loop:
 	call PIT.wait
 	jmp frame_loop
 
-.test_VRAM:
-	mov rsi, [rbx + SIS_VRAM]
-	mov ecx, [rbx + SIS_ScreenWidth]
-	mov eax, [rbx + SIS_ScreenHeight]
-	mul ecx
-	mov ecx, eax
+; .test_VRAM:
+; 	mov rsi, [rbx + SIS_VRAM]
+; 	mov ecx, [rbx + SIS_ScreenWidth]
+; 	mov eax, [rbx + SIS_ScreenHeight]
+; 	mul ecx
+; 	mov ecx, eax
 
-.loop:
-	mov r12d, [BLUE]
-	mov dword [rsi], r12d
-	add rsi, 4
-	loop .loop
+; .loop:
+; 	mov r12d, [BLUE]
+; 	mov dword [rsi], r12d
+; 	add rsi, 4
+; 	loop .loop
 
-	add byte [BLUE], 1
-	add byte [RED], 1
-	add byte [GREEN], 1
+; 	add byte [BLUE], 1
+; 	add byte [RED], 1
+; 	add byte [GREEN], 1
 
-.wait:
-	call PIT.wait
-	jmp .test_VRAM
+; .wait:
+; 	call PIT.wait
+; 	jmp .test_VRAM
 
 .end:
 	cli
 	hlt
 
-BLUE  db 0
-GREEN db 0
-RED   db 0
-reserved db 0
+; BLUE  db 0
+; GREEN db 0
+; RED   db 0
+; reserved db 0
 
-SystemInfoStruct dq 0
-
-frameCounter dd 50
+; SystemInfoStruct dq 0
+frameCounter dd 0
 
 %include "src/pit.asm"
 %include "src/frame.asm"
