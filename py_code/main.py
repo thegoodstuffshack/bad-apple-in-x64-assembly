@@ -3,18 +3,17 @@ import numpy
 import array
 import cv2
 
-# count = 6562 # number of frames
-count = 500 # number of frames
-hRes = 1280
-vRes = 800
+count = 6562 # number of frames
+hRes = 320
+vRes = 200
 # frameAlignment = 256
 a = 1
 binaryFileData = array.array('B')
 # zeroArray = [0] * int(frameAlignment - vRes*hRes/8 - 2)
-main_start = time.time()
 
 def binarize_image(img):
-	binary = numpy.where(img == 255, 1, img) 
+	binary = numpy.where(img == 255, 1, img)
+	# binary = binary.flatten()
 
 	binary = binary.tobytes()
 	i = 0
@@ -26,7 +25,60 @@ def binarize_image(img):
 		binaryFileData.append(lowerbyte)
 		i += 8
 
+# alternate between zero and 1, starting at zero
+# word for count, if max reached, set a max block then zero block then the remainder
+def binarize_basicCompression(img):
+    binary = numpy.where(img == 255, 1, img)
+    binary = binary.flatten()
+    zeroCount = 0
+    oneCount = 0
+    size = 2**16
+
+    for i in range(hRes * vRes):
+        if((binary[i]).any() == 0):
+            zeroCount += 1
+            if(oneCount == 0):
+                continue
+            remainder = oneCount % (size - 1)
+            for x in range(int(oneCount / (size - 1))):
+                setWordBlock(size - 1)
+                setWordBlock(0)
+            setWordBlock(remainder)
+            oneCount = 0
+        else:
+            oneCount += 1
+            if(zeroCount == 0):
+                continue
+            remainder = zeroCount % (size - 1)
+            for x in range(int(zeroCount / (size - 1))):
+                setWordBlock(size - 1)
+                setWordBlock(0)
+            setWordBlock(remainder)
+            zeroCount = 0
+    if(zeroCount != 0):
+        remainder = zeroCount % (size - 1)
+        for x in range(int(zeroCount / (size - 1))):
+            setWordBlock(size - 1)
+            setWordBlock(0)
+        setWordBlock(remainder)
+    if(oneCount != 0):
+        remainder = oneCount % (size - 1)
+        for x in range(int(oneCount / (size - 1))):
+            setWordBlock(size - 1)
+            setWordBlock(0)
+        setWordBlock(remainder)
+
+def setWordBlock(amount):
+    # turn int amount into 2 bytes (upper and lower)
+    upperbyte = amount >> 8
+    lowerbyte = amount & 255
+
+    binaryFileData.append(upperbyte)
+    binaryFileData.append(lowerbyte)
+
+
 # Main Loop
+main_start = time.time()
 while (a <= count):
 	if a > 99:
 		img = 'bad_apple_' + str(a) + '.png'
@@ -39,6 +91,7 @@ while (a <= count):
 	resized = cv2.resize(image, (hRes, vRes))
 	ret, bw_frame = cv2.threshold(resized, 180, 255, cv2.THRESH_BINARY)
 	binarize_image(bw_frame)
+	# binarize_basicCompression(bw_frame) # very slow
 	# binaryFileData.extend(zeroArray)
 
 	print('\rformatted frame: ' + str(a) + ' / ' + str(count), end='')

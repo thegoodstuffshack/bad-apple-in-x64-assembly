@@ -1,5 +1,4 @@
-
-RELOAD_VALUE equ 0x9B5C ; 30Hz
+RELOAD_VALUE equ 0x9B84 ; ~30Hz
 
 PIT:
 .init:

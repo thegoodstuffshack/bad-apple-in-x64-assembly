@@ -44,11 +44,15 @@ start:
 ; then implement a driver to read the files off a drive
 
 frame_loop:
-	; call getFrame
-	; call Buffer.update
-	; call Buffer.swap
-	; call PIT.wait
-	; jmp frame_loop
+	call printFrame
+	inc dword [frameCounter]
+	cmp dword [frameCounter], 1050
+	je .end
+	; ; call Buffer.update
+	; ; call Buffer.swap
+	; ; jmp $
+	call PIT.wait
+	jmp frame_loop
 
 .test_VRAM:
 	mov rsi, [rbx + SIS_VRAM]
@@ -71,6 +75,7 @@ frame_loop:
 	call PIT.wait
 	jmp .test_VRAM
 
+.end:
 	cli
 	hlt
 
@@ -81,8 +86,8 @@ reserved db 0
 
 SystemInfoStruct dq 0
 
-frameCounter dd 0
+frameCounter dd 50
 
 %include "src/pit.asm"
-; %include "src/frame.asm"
+%include "src/frame.asm"
 ; %include "src/buffer.asm"

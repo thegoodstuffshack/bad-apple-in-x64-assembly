@@ -9,5 +9,5 @@ nasm -f bin src/run.asm -o HDA_DRIVE/programs/bad-apple.bin
 qemu-system-x86_64 ^
 -bios ovmf-x64/usr/share/edk2.git/ovmf-x64/OVMF-pure-efi.fd ^
 -drive format=raw,file=fat::rw::HDA_DRIVE ^
--m 300M ^
+-m 600M ^
 -monitor stdio
