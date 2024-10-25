@@ -4,8 +4,8 @@ import array
 import cv2
 
 count = 6562 # number of frames
-hRes = 320
-vRes = 200
+hRes = 80
+vRes = 40
 # frameAlignment = 256
 a = 1
 binaryFileData = array.array('B')

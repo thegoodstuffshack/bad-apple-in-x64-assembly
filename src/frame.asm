@@ -1,6 +1,6 @@
-pixelScale equ 4
-width equ 320 ; max value 4096-16 -- needs to be divisible by 16
-height equ 200; max value 4096-16
+pixelScale equ 2
+width equ 80 ; max value 4096-16 -- needs to be divisible by 16
+height equ 40; max value 4096-16
 FRAME_BYTE_SIZE equ width * height / 8
 pixelOnColour equ 0x00FF00FF ; white
 pixelOffColour equ 0x0000FF00 ; black
@@ -30,12 +30,12 @@ printFrame: ; for now, the frame is uncompressed
 .word_loop:
 	mov ax, [rsi]
 	mov cl, 15
+	mov r11w, ax
 
 .bit_loop:
-	push rax
 	shr ax, cl
 	and ax, 1
-	pop rax
+	mov ax, r11w
 	mov r8d, pixelOffColour
 	jz .off
 .on:
@@ -81,8 +81,7 @@ printFrame: ; for now, the frame is uncompressed
 
 	pop rsi
 	sub r10w, 1
-	jz .end
-	jmp .word_loop
+	jnz .word_loop
 
 .end:
 	ret
