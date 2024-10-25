@@ -162,7 +162,7 @@ start:
 	mov rax, -10
 	ja error_print ; not handled yet
 
-; get framebuffer
+; get VRAM addr
 	mov rcx, [GOP_Interface]
 	mov rcx, [rcx + 3*8] ; Mode
 	; mov rdx, [rcx]
@@ -170,6 +170,17 @@ start:
 	mov [GOP_VRAM], rdx
 	mov rdx, [rcx + 4*8] ; FrameBufferSize
 	mov [GOP_VRAMSize], rdx
+
+; alloc FrameBuffer
+	add rdx, 15 ; allow for 16 bit alignment
+	lea r8, FrameBufferPtr
+	call allocPool
+	cmp rax, EFI_ERR_SUCCESS
+	jne error_print
+; align 16
+	mov rax, [FrameBufferPtr]
+	and rax, 0xF
+	add [FrameBufferPtr], rax ; either 0 or 8
 
 .load_program:
 ; EFI_BOOT_SERVICES.OpenProtocol()
@@ -228,10 +239,15 @@ start:
 	jne error_print
 	mov [FrameFileSize], rdx
 
+	add rdx, 8 ; allow for 16 bit alignment
 	lea r8, [FrameFilePtr]
 	call allocPool
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
+; align 16
+	mov rax, [FrameFilePtr]
+	and rax, 0xF
+	add [FrameFilePtr], rax ; either 0 or 8
 
 	mov rcx, [FrameFileProtocol]
 	lea rdx, [FrameFileSize]
@@ -287,7 +303,7 @@ start:
 	cmp rax, EFI_ERR_SUCCESS
 	jne error_print
 
-SystemInfoStructSize equ 3*8 + 2*4 + 2*8
+SystemInfoStructSize equ 3*8 + 2*4 + 3*8
 ; allocatePool for SystemInfoStruct
 	mov rdx, SystemInfoStructSize
 	lea r8, [temp_SystemInfoStructPtr]
@@ -312,6 +328,8 @@ SystemInfoStructSize equ 3*8 + 2*4 + 2*8
 	mov [rcx + 3*8 + 2*4], rdx
 	mov rdx, [FrameFileSize]
 	mov [rcx + 3*8 + 2*4 + 1*8], rdx
+	mov rdx, [FrameBufferPtr]
+	mov [rcx + 3*8 + 2*4 + 2*8], rdx
 
 	mov rbx, rcx
 
@@ -454,6 +472,17 @@ readFile: ; EFI_FILE_PROTOCOL.Read()
 	add rsp, 32
 	ret
 
+; IN rax: **void
+; OUT *rax: *void
+; assuming 8-bit aligned (from allocPool)
+align16:
+	mov rcx, [rax]
+	and rcx, 0xF
+	jz .end
+	add qword [rax], 8
+.end:
+	ret
+
 error_print:
 	push rax
 	sub rsp, 32
@@ -527,6 +556,8 @@ text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
 	GOP_Height		dd 0
 	GOP_VRAM		dq 0
 	GOP_VRAMSize	dq 0
+
+	FrameBufferPtr dq 0
 
 	temp_SystemInfoStructPtr dq 0
 

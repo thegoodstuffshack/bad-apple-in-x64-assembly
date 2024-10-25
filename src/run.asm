@@ -13,6 +13,7 @@ signature: db 'BadApple'
 ;	UINT32	ScreenHeight
 ;	VOID*	FrameData
 ;	UINT64	FrameDataSize
+;	VOID*	FrameBuffer
 ;	...
 ; }
 
@@ -26,15 +27,19 @@ SIS_ScreenWidth 	equ 24
 SIS_ScreenHeight 	equ 28
 SIS_FrameData 		equ 32
 SIS_FrameDataSize 	equ 40
+SIS_FrameBuffer		equ 48
 
 
 start:
 	call PIT.init
+
 	; requires a delay between the init and the wait for bare-metal
 	mov ecx, 0x03FFFFFF
 .delay:
 	nop
 	loop .delay
+
+	call Buffer.init
 
 	call PIT.wait ; sync the first frame
 
@@ -42,11 +47,14 @@ start:
 ; then implement a driver to read the files off a drive
 
 frame_loop:
-	call printFrame
+	call Buffer.update
+	call Buffer.swap
+
 	inc dword [frameCounter]
 	cmp dword [frameCounter], 6562
 	je .end
 
+	mov r15, [VRAM_BYTESIZE]
 	call PIT.wait
 	jmp frame_loop
 
@@ -58,3 +66,4 @@ frameCounter dd 0
 
 %include "src/pit.asm"
 %include "src/frame.asm"
+%include "src/buffer.asm"

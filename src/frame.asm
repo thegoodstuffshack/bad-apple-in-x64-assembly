@@ -1,4 +1,4 @@
-pixelScale equ 2
+pixelScale equ 6
 width equ 80 ; max value 4096-16 -- needs to be divisible by 16
 height equ 40; max value 4096-16
 FRAME_BYTE_SIZE equ width * height / 8
@@ -16,12 +16,12 @@ Frame:
 ret
 .updateFileName:
 
-
+; IN rdi: *buffer
 printFrame: ; for now, the frame is uncompressed
-	mov rdi, [rbx + SIS_VRAM]
+	; mov rdi, [rbx + SIS_VRAM]
 	mov rsi, [rbx + SIS_FrameData]
 	mov eax, [frameCounter]
-	mov edx, FRAME_BYTE_SIZE	
+	mov edx, FRAME_BYTE_SIZE
 	mul edx
 	add rsi, rax
 	mov r9w, width / 16
@@ -70,7 +70,7 @@ printFrame: ; for now, the frame is uncompressed
 	mov rsi, rdi
 	mov rdx, rsi
 	add rdi, rax
-	
+
 	rep movsb ; copy vram down a row
 	mov rsi, rdx
 	jmp .applyPixelHeightScale
@@ -85,22 +85,3 @@ printFrame: ; for now, the frame is uncompressed
 
 .end:
 	ret
-
-
-SIS_Size 			equ 0
-SIS_SystemTable 	equ 8
-SIS_VRAM 			equ 16
-SIS_ScreenWidth 	equ 24
-SIS_ScreenHeight 	equ 28
-SIS_FrameData 		equ 32
-SIS_FrameDataSize 	equ 40
-
-
-
-
-; FrameFileProtocol dq 0
-; FrameFileName dw __utf16__ `Bad_Apple_Frame 00000\0`
-; FrameByteSize dq FRAME_BYTE_SIZE
-
-FrameBuffer:
-; resb FRAME_BYTE_SIZE
