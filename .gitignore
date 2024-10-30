@@ -1,1 +1,4 @@
 *.efi
+*.exe
+*.bin
+*.data
