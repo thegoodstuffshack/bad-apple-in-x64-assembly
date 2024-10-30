@@ -458,6 +458,7 @@ getFileSize: ; EFI_FILE_PROTOCOL.GetInfo()
 	sub rsp, 32
 	call [EFI_FreePool]
 	add rsp, 32
+	mov qword [DRIVE_InfoBufferSize], 0
 	pop rdx
 	ret 8
 
@@ -470,17 +471,6 @@ readFile: ; EFI_FILE_PROTOCOL.Read()
 	sub rsp, 32
 	call [rax + 4*8] ; Read
 	add rsp, 32
-	ret
-
-; IN rax: **void
-; OUT *rax: *void
-; assuming 8-bit aligned (from allocPool)
-align16:
-	mov rcx, [rax]
-	and rcx, 0xF
-	jz .end
-	add qword [rax], 8
-.end:
 	ret
 
 error_print:
