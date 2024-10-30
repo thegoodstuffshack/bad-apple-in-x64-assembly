@@ -4,8 +4,8 @@ import array
 import cv2
 
 count = 6562 # number of frames
-hRes = 80
-vRes = 40
+hRes = 1280
+vRes = 800
 # frameAlignment = 256
 a = 1
 binaryFileData = array.array('B')
@@ -28,53 +28,68 @@ def binarize_image(img):
 # alternate between zero and 1, starting at zero
 # word for count, if max reached, set a max block then zero block then the remainder
 def binarize_basicCompression(img):
-    binary = numpy.where(img == 255, 1, img)
-    binary = binary.flatten()
-    zeroCount = 0
-    oneCount = 0
-    size = 2**16
+	binary = numpy.where(img == 255, 1, 0)
+	binary = binary.flatten()
+	zeroCount = 0
+	oneCount = 0
+	isfirstblock = True
+	size = 2**16
 
-    for i in range(hRes * vRes):
-        if((binary[i]).any() == 0):
-            zeroCount += 1
-            if(oneCount == 0):
-                continue
-            remainder = oneCount % (size - 1)
-            for x in range(int(oneCount / (size - 1))):
-                setWordBlock(size - 1)
-                setWordBlock(0)
-            setWordBlock(remainder)
-            oneCount = 0
-        else:
-            oneCount += 1
-            if(zeroCount == 0):
-                continue
-            remainder = zeroCount % (size - 1)
-            for x in range(int(zeroCount / (size - 1))):
-                setWordBlock(size - 1)
-                setWordBlock(0)
-            setWordBlock(remainder)
-            zeroCount = 0
-    if(zeroCount != 0):
-        remainder = zeroCount % (size - 1)
-        for x in range(int(zeroCount / (size - 1))):
-            setWordBlock(size - 1)
-            setWordBlock(0)
-        setWordBlock(remainder)
-    if(oneCount != 0):
-        remainder = oneCount % (size - 1)
-        for x in range(int(oneCount / (size - 1))):
-            setWordBlock(size - 1)
-            setWordBlock(0)
-        setWordBlock(remainder)
+	for i in range(hRes * vRes):
+		if((binary[i]).any() == 0):
+			zeroCount += 1
+			if(oneCount != 0):
+				if(isfirstblock):
+					isfirstblock = False
+					setWordBlock(0)
+				setWordBlock(oneCount)
+				# remainder = oneCount % (size - 1)
+				# for x in range(int(oneCount / (size - 1))):
+				# 	setWordBlock(size - 1)
+				# 	setWordBlock(0)
+				# setWordBlock(remainder)
+				oneCount = 0
+		else:
+			oneCount += 1
+			if(zeroCount != 0):
+				if(isfirstblock):
+					isfirstblock = False
+				setWordBlock(zeroCount)
+				# remainder = zeroCount % (size - 1)
+				# for x in range(int(zeroCount / (size - 1))):
+				# 	setWordBlock(size - 1)
+				# 	setWordBlock(0)
+				# setWordBlock(remainder)
+				zeroCount = 0
+	if(zeroCount != 0):
+		# remainder = zeroCount % (size - 1)
+		# for x in range(int(zeroCount / (size - 1))):
+		# 	setWordBlock(size - 1)
+		# 	setWordBlock(0)
+		setWordBlock(zeroCount)
+	if(oneCount != 0):
+		# remainder = oneCount % (size - 1)
+		# for x in range(int(oneCount / (size - 1))):
+		# 	setWordBlock(size - 1)
+		# 	setWordBlock(0)
+		setWordBlock(oneCount)
 
 def setWordBlock(amount):
-    # turn int amount into 2 bytes (upper and lower)
-    upperbyte = amount >> 8
-    lowerbyte = amount & 255
-
-    binaryFileData.append(upperbyte)
-    binaryFileData.append(lowerbyte)
+	blocks = divmod(amount, 2**16-1)
+	if(blocks[0] != 0):
+		for i in range(blocks[0]):
+			binaryFileData.append(255)
+			binaryFileData.append(255)
+			binaryFileData.append(0)
+			binaryFileData.append(0)
+	if(blocks[1] != 0):
+		upperbyte = blocks[1] >> 8
+		lowerbyte = blocks[1] & 255
+		binaryFileData.append(lowerbyte)
+		binaryFileData.append(upperbyte)
+	else:
+		binaryFileData.append(0)
+		binaryFileData.append(0)
 
 
 # Main Loop
@@ -90,15 +105,15 @@ while (a <= count):
 	image = cv2.imread('../image_sequence/' + img, cv2.IMREAD_GRAYSCALE)
 	resized = cv2.resize(image, (hRes, vRes))
 	ret, bw_frame = cv2.threshold(resized, 180, 255, cv2.THRESH_BINARY)
-	binarize_image(bw_frame)
-	# binarize_basicCompression(bw_frame) # very slow
+	# binarize_image(bw_frame)
+	binarize_basicCompression(bw_frame) # very slow
 	# binaryFileData.extend(zeroArray)
 
 	print('\rformatted frame: ' + str(a) + ' / ' + str(count), end='')
 	a += 1
 
 binaryFileData = binaryFileData.tobytes()
-with open('../HDA_DRIVE/frame_data/frames.data', 'wb') as file:
+with open('../HDA_DRIVE/frame_data/frames_compressed.data', 'wb') as file:
 	file.write(binaryFileData)
 
 print('\nTotal Time: ' + str(time.time()-main_start))
