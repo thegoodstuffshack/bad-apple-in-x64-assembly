@@ -1,9 +1,8 @@
-pixelScale equ 6
-width equ 80 ; max value 4096-16 -- needs to be divisible by 16
-height equ 40; max value 4096-16
-FRAME_BYTE_SIZE equ width * height / 8
-pixelOnColour equ 0x00FF00FF ; white
-pixelOffColour equ 0x0000FF00 ; black
+pixelScale equ 1
+width equ 640
+height equ 400
+pixelOnColour equ 0x00FFFFFF ; white
+pixelOffColour equ 0x00000000 ; black
 
 Frame:
 .get:
@@ -21,7 +20,7 @@ printFrame: ; for now, the frame is uncompressed
 	; mov rdi, [rbx + SIS_VRAM]
 	mov rsi, [rbx + SIS_FrameData]
 	mov eax, [frameCounter]
-	mov edx, FRAME_BYTE_SIZE
+	mov edx, width * height / 8
 	mul edx
 	add rsi, rax
 	mov r9w, width / 16
@@ -85,3 +84,74 @@ printFrame: ; for now, the frame is uncompressed
 
 .end:
 	ret
+
+; IN rdi: *buffer
+printCompressedFrame:
+	xor r9d, r9d
+	xor rcx, rcx
+	mov rsi, [rbx + SIS_FrameData]
+	mov r11, [.currentFramePtrOff]
+	mov r12d, [rbx + SIS_ScreenWidth]
+	shl r12d, 2
+	sub r12d, width * pixelScale * 4
+
+.loop_off:
+	mov r8d, pixelOffColour
+.loop_on:
+	cmp ecx, width*height
+	jae .end
+
+; assuming first word block is always off, on and off word blocks alternate
+	xor rax, rax
+	mov ax, [rsi + r11]
+	add r11, 2
+
+	cmp eax, 0
+	je .next
+
+	add ecx, eax
+
+.wordBlockLoop:
+	mov r13w, pixelScale
+.width_scaling:
+	mov [rdi], r8d
+	add rdi, 4
+	sub r13w, 1
+	jnz .width_scaling
+	inc r9d
+	cmp r9d, width
+	jne .skip
+	xor r9d, r9d
+	mov r13w, pixelScale
+	
+	push rsi
+	push rcx
+	mov rsi, rdi
+	sub rsi, width * pixelScale * 4
+.height_scaling:
+	add rdi, r12
+	sub r13w, 1
+	jz .finished_scaling
+	mov ecx, width * pixelScale * 4
+	rep movsb
+	add rsi, r12
+	jmp .height_scaling
+
+.finished_scaling:
+	pop rcx
+	pop rsi
+.skip:
+	sub eax, 1
+	jnz .wordBlockLoop
+
+.next:
+	cmp r8d, pixelOffColour
+	jne .loop_off
+	mov r8d, pixelOnColour
+	jmp .loop_on
+
+.end:
+	mov [.currentFramePtrOff], r11
+	ret
+
+.currentFramePtrOff dq 0

@@ -9,13 +9,13 @@ Buffer:
 
 .update:
 	mov rdi, [rbx + SIS_FrameBuffer]
-	call printFrame
+	call printCompressedFrame
 	ret
 
 .swap:
 	mov rdi, [rbx + SIS_VRAM]
 	mov rsi, [rbx + SIS_FrameBuffer]
-	mov r8w, height * pixelScale
+	mov r8w, height * pixelScale 
 	mov eax, [rbx + SIS_ScreenWidth]
 	shl rax, 2
 	sub rax, width * pixelScale * 4

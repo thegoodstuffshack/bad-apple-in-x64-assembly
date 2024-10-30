@@ -148,19 +148,14 @@ start:
 	jne error_print
 
 	mov rcx, [GOP_CurrentModeInfo]
-	mov edx, [rcx + 4] ; H Res
-	mov [GOP_Width], edx
 	mov edx, [rcx + 8] ; V Res
 	mov [GOP_Height], edx
 	mov edx, [rcx + 32] ; PixelsPerScanLine
-	cmp edx, [GOP_Width]
-	je .GOP_skipHResFix
 	mov [GOP_Width], edx
-.GOP_skipHResFix:
 	mov r12d, [rcx + 12] ; PixelFormat
 	cmp r12d, 1
 	mov rax, -10
-	ja error_print ; not handled yet
+	ja error_print ; program assumes 4 bpp
 
 ; get VRAM addr
 	mov rcx, [GOP_Interface]
@@ -534,7 +529,7 @@ text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
 	FrameFileProtocol dq 0
 	FrameFilePtr   dq 0
 	FrameFileSize  dq 0
-	FrameFileName  dw __utf16__ `\\frame_data\\frames.data\0`
+	FrameFileName  dw __utf16__ `\\frame_data\\CompressedFrameData.bin\0`
 
 	; Graphical Output Protocol
 	GOP_Interface	dq 0

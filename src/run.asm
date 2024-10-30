@@ -33,14 +33,14 @@ SIS_FrameBuffer		equ 48
 start:
 	call PIT.init
 
-	; requires a delay between the init and the wait for bare-metal
+	; requires a delay between the init and the wait for bare-metal, 
+	; Buffer.init may be enough but this is a small delay anyway
 	mov ecx, 0x03FFFFFF
 .delay:
 	nop
 	loop .delay
 
 	call Buffer.init
-
 	call PIT.wait ; sync the first frame
 
 ; temporarily load the entire video into memory in order to test the buffer and pit,
@@ -54,7 +54,6 @@ frame_loop:
 	cmp dword [frameCounter], 6562
 	je .end
 
-	mov r15, [VRAM_BYTESIZE]
 	call PIT.wait
 	jmp frame_loop
 
