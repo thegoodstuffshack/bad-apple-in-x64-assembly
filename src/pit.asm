@@ -1,50 +1,87 @@
-RELOAD_VALUE equ 0x9B84 ; ~29.97Hz
+; pit.asm
 
-PIT:
-.init:
-	cli
-	mov al, 0b00110100	; channel 0, lobyte/hibyte, mode 2, binary
-	out 0x43, al		; send to PIT controller
-	
-	mov ax, RELOAD_VALUE
-	out 0x40, al
-	mov al, ah
-	out 0x40, al
-	sti
-ret
+PIT_IO_CHANNEL_0 equ 0x40
+PIT_IO_CONTROLLER equ 0x43
+PIT_CHANNEL_0 equ 0b00_00_000_0
+PIT_CHANNEL_1 equ 0b01_00_000_0
+PIT_CHANNEL_2 equ 0b10_00_000_0
+PIT_ACCESS_LO equ 0b00_01_000_0
+PIT_ACCESS_HI equ 0b00_10_000_0
+PIT_ACCESS_LOHI equ 0b00_11_000_0
+PIT_OPMODE_0 equ 0b00_00_000_0
+PIT_OPMODE_1 equ 0b00_00_001_0
+PIT_OPMODE_2 equ 0b00_00_010_0
+PIT_OPMODE_3 equ 0b00_00_011_0
+PIT_OPMODE_4 equ 0b00_00_100_0
+PIT_OPMODE_5 equ 0b00_00_101_0
+PIT_DIGIT_BIT equ 0b00_00_000_0
+PIT_DIGIT_BCD equ 0b00_00_000_1
 
-; ; using status latch
-; .wait: ; should work so long as the wait loop can check at least once per count
-; 	cli
-; .w1:
-; 	mov al, 0b11100010 ; latch status, channel 0
-; 	out 0x43, al
-; 	in al, 0x40
-; 	and al, 0b10000000
-; 	jz .w1
-; 	sti
-; ret
 
-; using count
-.wait: ; doesnt latch the count, however should still work, not ideal and can get stuck
-	cli
-	in al, 0x40
-	mov cl, al
-	in al, 0x40
-	mov ch, al
-	mov dx, cx
-	inc dx
+; sets the PIT command byte and reload value
+;
+; IN al: Command Byte (7-6 channel, 5-4 access mode, 3-1 op mode, 0 digit mode)
+; IN bx: reload value (bh hi, bl lo)
+program_pit:
+    xor dx, dx
+    mov dl, al
+    shr dl, 6
+    add dl, PIT_IO_CHANNEL_0
 
-.w1:
-	cmp cx, dx
-	jae .tick
+    pushf
+    cli
+    out PIT_IO_CONTROLLER, al
 
-	in al, 0x40
-	mov cl, al
-	in al, 0x40
-	mov ch, al
-	jmp .w1
+    and al, PIT_ACCESS_LOHI
+    cmp al, PIT_ACCESS_HI
+    mov ax, bx
+    jb .lo_only
+    ja .lohi
+    jmp .hi_only
 
-.tick:
-	sti
-ret
+.lohi:
+    out dx, al
+.hi_only:
+    mov al, ah
+.lo_only:
+    out dx, al
+
+.end:
+    popf
+    ret
+
+
+;
+pit_interrupt_handler:
+    ; push rax
+    ; mov rax, [.counter]
+    ; cmp rax, byte 0
+    ; jz .end ; no current pit_sleep active
+
+    ; dec rax
+    ; mov [.counter], rax
+    call frame_loop
+
+.end:
+    mov al, 0 ; irq0
+    call acknowledge_irq
+    ; pop rax
+    iretq
+
+.counter: dq 0
+
+
+; ; Waits at least (num - 1) * (reload_value / 1193182) seconds
+; ;
+; ; IN rcx: num of pit cycles
+; pit_sleep:
+;     mov qword [pit_interrupt_handler.counter], rcx
+
+;     sti ; ensure interrupts are enabled before halting
+; .wait:
+;     hlt
+;     cmp qword [pit_interrupt_handler.counter], byte 0
+;     jnz .wait
+
+; .end:
+;     ret

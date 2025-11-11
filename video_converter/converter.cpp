@@ -8,10 +8,8 @@
 #include "opencv2/imgcodecs.hpp"
 
 #define NUMBER_OF_FRAMES 6562
-#define RESIZED_W 640
+#define RESIZED_W 640 
 #define RESIZED_H 400
-#define INPUTFOLDER "../../image_sequence/bad_apple_"
-#define OUTPUTFOLDER "../CompressedFrameData.bin"
 
 
 void setBlock(unsigned int num, std::vector<char> *buffer, unsigned int isLastBlock) {
@@ -64,7 +62,11 @@ void compressFrame(unsigned char *frame, std::vector<char> *buffer) {
 }
 
 int main(int argc, char** argv) {
-	std::ofstream outputFile(OUTPUTFOLDER, std::ios::binary);
+	if (argc != 3) {
+		std::cout << "Usage: ./converter.exe PATH/TO/IMAGE_SEQUENCE/pattern PATH/TO/OUT/FILE" << std::endl;
+	}
+
+	std::ofstream outputFile(argv[2], std::ios::binary);
 
 	cv::Mat baseFrame;
 	cv::Mat resizedFrame;
@@ -73,7 +75,7 @@ int main(int argc, char** argv) {
 	std::chrono::time_point time = std::chrono::system_clock::now();
 
 	for(unsigned int count = 1; count <= NUMBER_OF_FRAMES; count++) {
-		std::string file = INPUTFOLDER;
+		std::string file = argv[1];
 
 		if (count > 99) {}
 		else if (count > 9) {file += "0";}

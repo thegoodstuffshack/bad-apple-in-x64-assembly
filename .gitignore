@@ -1,6 +1,7 @@
-*.efi
+HDA_DRIVE
+image_sequence
+log.txt
 *.exe
-*.bin
-*.data
 *.dll
 *.a
+*.h*

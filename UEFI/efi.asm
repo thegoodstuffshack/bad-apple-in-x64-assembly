@@ -32,8 +32,8 @@ OPTIONAL_HEADER:
 	dd start		; relative offset of entry point in memory (same as entry point)
 	dq M_OFFS		; image base, desired offset in memory (see org)
 	SECT_AL equ 2048
-	dd SECT_AL	; section alignment - write decimal as hex
-	dd SECT_AL	; file alignment    - write decimal as hex
+	dd SECT_AL		; section alignment - write decimal as hex
+	dd SECT_AL		; file alignment    - write decimal as hex
 	times 16 db 0	; os, image and subsystem version, 4 bytes reserved
 	dd SECT_AL+SIZEOFALLTEXTSECTIONS+SIZEOFALLDATASECTIONS+SIZEOFALLBSSSECTIONS	; image size
 	dd SECT_AL		; size of headers, rounded to multiple of file alignment
@@ -85,8 +85,6 @@ section .text follows=.header
 	NULL equ 0
 
 start:
-	sub rsp, 8 ; align stack to 64
-
 	mov [EFI_Handle], rcx
 	mov [EFI_SystemTable], rdx
 
@@ -160,14 +158,13 @@ start:
 ; get VRAM addr
 	mov rcx, [GOP_Interface]
 	mov rcx, [rcx + 3*8] ; Mode
-	; mov rdx, [rcx]
 	mov rdx, [rcx + 3*8] ; FrameBufferBase
 	mov [GOP_VRAM], rdx
 	mov rdx, [rcx + 4*8] ; FrameBufferSize
 	mov [GOP_VRAMSize], rdx
 
 ; alloc FrameBuffer
-	add rdx, 15 ; allow for 16 bit alignment
+	add rdx, 8 ; allow for 16 bit alignment
 	lea r8, FrameBufferPtr
 	call allocPool
 	cmp rax, EFI_ERR_SUCCESS
@@ -278,17 +275,21 @@ start:
 	jne error_print
 	mov [ProgramFileSize], rdx
 
-	lea r8, [ProgramFilePtr]
-	call allocPool
-	cmp rax, EFI_ERR_SUCCESS
-	jne error_print
+    add rdx, 255 ; allow for align to 256 bytes
+    lea r8, [ProgramFilePtr]
+    call allocPool
+    cmp rax, EFI_ERR_SUCCESS
+    jne error_print
 
-	mov rcx, [DRIVE_ProgramFile]
-	lea rdx, [ProgramFileSize]
-	mov r8, [ProgramFilePtr]
-	call readFile
-	cmp rax, EFI_ERR_SUCCESS
-	jne error_print
+    mov r8, [ProgramFilePtr]
+    add r8, 255
+    and r8b, 0 ; align 256 bytes
+    mov [ProgramFilePtr], r8
+    mov rcx, [DRIVE_ProgramFile]
+    lea rdx, [ProgramFileSize]
+    call readFile
+    cmp rax, EFI_ERR_SUCCESS
+    jne error_print
 
 	mov rcx, [DRIVE_ProgramFile]
 	mov rax, [DRIVE_Root]
@@ -522,7 +523,7 @@ text:  ; each char becomes 00xxh when __utf16__ (uefi standard)
 	; Program Stuff
 	ProgramFilePtr   dq 0
 	ProgramFileSize  dq 0
-	ProgramFileName  dw __utf16__ `\\programs\\bad-apple.bin\0`
+	ProgramFileName  dw __utf16__ `\\programs\\bad_apple.bin\0`
 	ProgramSignature db 'BadApple'
 
 	; Frame Data

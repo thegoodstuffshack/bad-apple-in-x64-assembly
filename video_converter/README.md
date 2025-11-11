@@ -1,13 +1,9 @@
 # video-frames-to-bw-compressed-binary
 
-## 
+##
 
-### C++ Lib Requirements
+- Download frames from <https://archive.org/details/bad_apple_is.7z>
 
-- opencv v4.5.5
+## Lib Requirements
 
-### Compilation
-
-- For minGW: 
-
-``` g++ converter.cpp -o ./bin/main.exe -I"./include" -L"./lib" -lopencv_core455 -lopencv_imgproc455 -lopencv_imgcodecs455 ```
+- opencv (tested on v4.5.5)
